@@ -12,7 +12,7 @@ from urllib.parse import unquote
 
 def safeify(name):
     template = {u'\\': u'＼', u'/': u'／', u':': u'：', u'*': u'＊',
-                u'?': u'？', u'"': u'＂', u'<': u'＜', u'>': u'＞', u'|': u'｜','\n':''}
+                u'?': u'？', u'"': u'＂', u'<': u'＜', u'>': u'＞', u'|': u'｜','\n':'','\r':''}
     for illegal in template:
         name = name.replace(illegal, template[illegal])
     return name
