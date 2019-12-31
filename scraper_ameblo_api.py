@@ -44,8 +44,7 @@ def parse_list(blog_id, start_entry, results=[], until=None, auto_iter=True):
 
 
 def download_all(blog_id, save_folder='.', executor=None, until=None, last_entry='auto'):
-    if not executor:
-        executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
+
     if last_entry == 'auto':
         soup = get(f'https://ameblo.jp/{blog_id}/')
         last_entry = re.search(r'entry-(\d+).html',
@@ -56,5 +55,11 @@ def download_all(blog_id, save_folder='.', executor=None, until=None, last_entry
         return
     results = parse_list(blog_id, last_entry, results=[], until=until)
     print(f'Get {len(results)} entries. Start downloading..')
+    shutdown_executor_inside = False
+    if not executor:
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
+        shutdown_executor_inside = True
     for id in results:
         executor.submit(parse_entry, blog_id, id, save_folder)
+    if shutdown_executor_inside:
+        executor.shutdown()
