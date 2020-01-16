@@ -24,7 +24,7 @@ def get(url, headers=None, cookies=None, encoding='utf-8'):
     return BeautifulSoup(r.text, 'lxml')
 
 
-def download(url, filename=None, save_path='.', cookies=None, dry_run=False):
+def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip'):
     if dry_run:
         return
     if not filename:
@@ -35,13 +35,23 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False):
     filename = Path(filename)    
     filename.parent.mkdir(parents=True, exist_ok=True)
     if filename.exists():
-        print(f'File {filename.name} already exists!')
-        return
+        if dupe == 'skip':
+            print(f'File {filename.name} already exists!')
+            return
+        if dupe == 'rename':
+            #TODO
+            pass
+        if dupe == 'overwrite':
+            pass
 
-    print(f'Downloading {filename.name}...')
-
-    with filename.open('wb') as f:        
-        f.write(requests.get(url, cookies=cookies).content)
+    print(f'Downloading {filename.name} from {url}...')
+    with filename.open('wb') as f:
+        r = requests.get(url, cookies=cookies)
+        if r.status_code == 200:
+            f.write(r.content)
+        else:
+            print(f'Error! Get HTTP {r.status_code}.')
+            # An empty file will still be craeted. This is by design.
 
 def hello(a, b):
     print(f'hello: {a} and {b}')
