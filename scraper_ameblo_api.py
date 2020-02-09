@@ -48,7 +48,7 @@ def download_all(blog_id, save_folder='.', executor=None, until=None, last_entry
     if last_entry == 'auto':
         soup = get(f'https://ameblo.jp/{blog_id}/')
         last_entry = re.search(r'entry-(\d+).html',
-                               soup.select_one('h2 > a')['href'])[1]
+                               soup.select_one(f'a[href*="{blog_id}/entry-"]')['href'])[1]
         print(f'Info: {blog_id}\'s newest entry is {last_entry}.')
     if last_entry == until:
         print('No new update.')
