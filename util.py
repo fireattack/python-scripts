@@ -24,7 +24,7 @@ def get(url, headers=None, cookies=None, encoding='utf-8'):
     return BeautifulSoup(r.text, 'lxml')
 
 
-def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip'):
+def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip',referer=None):
     if dry_run:
         return
     if not filename:
@@ -46,7 +46,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
 
     print(f'Downloading {filename.name} from {url}...')
     with filename.open('wb') as f:
-        r = requests.get(url, cookies=cookies)
+        r = requests.get(url, headers={"referer": referer}, cookies=cookies)
         if r.status_code == 200:
             f.write(r.content)
         else:
