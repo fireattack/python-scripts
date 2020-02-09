@@ -26,7 +26,7 @@ def parse_entry(blog_id, id, save_folder='.'):
         download(img_url, Path(save_folder) / img_name)
 
 
-def parse_list(blog_id, start_entry, results=[], until=None, auto_iter=True):
+def parse_list(blog_id, start_entry, *, results=[], until=None, auto_iter=True):
     print(f'Parsing {blog_id} starting from {start_entry}...')
     myjson = requests.get(
         f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{start_entry}/neighbors?limit=100').json()
@@ -41,6 +41,23 @@ def parse_list(blog_id, start_entry, results=[], until=None, auto_iter=True):
         next_id = re.search(r'/entries/(\d+)/', myjson['paging']['nextUrl'])[1]
         parse_list(blog_id, next_id, results=results, until=until)
     return results
+
+# Without using iteration for better readability 
+def parse_list_new(blog_id, start_entry, until=None):
+    results = []
+    while True:
+        print(f'Parsing {blog_id} starting from {start_entry}...')
+        myjson = requests.get(
+            f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{start_entry}/neighbors?limit=100').json()
+        for entry in myjson['data']:
+            id = entry["entryId"]
+            if until and str(id) == str(until):
+                print(f'Reached last record {until}! Stopping..')
+                return results
+            results.append(id)
+        if not myjson['paging']['nextUrl']:
+            return results
+        start_entry = re.search(r'/entries/(\d+)/', myjson['paging']['nextUrl'])[1]
 
 
 def download_all(blog_id, save_folder='.', executor=None, until=None, last_entry='auto'):
