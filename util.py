@@ -27,16 +27,16 @@ def get(url, headers=None, cookies=None, encoding='utf-8'):
 def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip',referer=None):
     if dry_run:
         return
-    if not filename:
+    if filename: # If filename is supplied
+        f = Path(filename)
+    else: # If not, create a f using save_path + web_name for now.
         p = Path(save_path)
         web_name = unquote(url.split('?')[0].split('/')[-1])
-        filename = p / safeify(web_name)       
+        f = p / safeify(web_name)
     
-    filename = Path(filename)    
-    filename.parent.mkdir(parents=True, exist_ok=True)
-    if filename.exists():
+    if f.exists() and f.suffix.lower() not in ['.php', '']:
         if dupe == 'skip':
-            print(f'File {filename.name} already exists!')
+            print(f'File {f.name} already exists!')
             return
         if dupe == 'rename':
             #TODO
@@ -44,14 +44,33 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
         if dupe == 'overwrite':
             pass
 
-    print(f'Downloading {filename.name} from {url}...')
-    with filename.open('wb') as f:
-        r = requests.get(url, headers={"referer": referer}, cookies=cookies)
+    f.parent.mkdir(parents=True, exist_ok=True)
+
+    with requests.get(url, headers={"referer": referer}, cookies=cookies) as r:
         if r.status_code == 200:
-            f.write(r.content)
+            # Find filename from header
+            if not filename and "Content-Disposition" in r.headers:
+                if m := re.search(r"filename=(.+)", r.headers["Content-Disposition"]):                    
+                    header_name = m[1]
+                    if header_name[-1] == '"' or header_name[-1] == "'":
+                        header_name = header_name[1:-1]
+                    new_f = p / header_name
+                    if not new_f.exists():
+                        print(f'Find filename {header_name} in header. Using it instead..')
+                        f = new_f
+                    else:
+                        print(f'File {new_f.name} already exists!')
+                        return
+                        
+            print(f'Downloading {f.name} from {url}...')
+            with f.open('wb') as fio:                
+                fio.write(r.content)
         else:
-            print(f'Error! Get HTTP {r.status_code}.')
+            print(f'Error! Get HTTP {r.status_code} from {url}.')
             # An empty file will still be craeted. This is by design.
+            f.open('wb').close()
+                
+                
 
 def hello(a, b):
     print(f'hello: {a} and {b}')
