@@ -9,6 +9,16 @@ import json
 import re
 from urllib.parse import unquote
 
+def dump_json(mydict, filename):
+    if not filename.endswith('.json'):
+        filename = filename + '.json'
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(mydict, f, ensure_ascii=False, indent=2)
+
+def load_json(filename):
+    with open(filename, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    return data
 
 def safeify(name):
     template = {u'\\': u'＼', u'/': u'／', u':': u'：', u'*': u'＊',
