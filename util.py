@@ -35,6 +35,25 @@ def get(url, headers=None, cookies=None, encoding='utf-8'):
 
 
 def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip',referer=None):
+    
+    def check_dupe(filename):
+        if not filename.exists():
+            return filename        
+        if dupe == 'overwrite':
+            print(f'[Warning] File {filename.name} already exists! Overwriting...')
+            return filename
+        if dupe == 'skip':
+            print(f'[Warning] File {filename.name} already exists! Skip.')
+            return None
+        if dupe == 'rename':            
+            i = 2
+            stem = filename.stem
+            while filename.exists():
+                filename = filename.with_name(f'{stem}_{i}{filename.suffix}')
+                i = i + 1
+            print(f'[Warning] File already exists! Rename to {filename.name}.')
+            return filename
+
     if dry_run:
         return
     if filename: # If filename is supplied
@@ -44,19 +63,13 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
         web_name = unquote(url.split('?')[0].split('/')[-1])
         f = p / safeify(web_name)
     
-    if f.exists() and f.suffix.lower() not in ['.php', '']:
-        if dupe == 'skip':
-            print(f'File {f.name} already exists!')
+    if f.suffix.lower() not in ['.php', '']:
+        if not (f := check_dupe(f)):
             return
-        if dupe == 'rename':
-            #TODO
-            pass
-        if dupe == 'overwrite':
-            pass
 
     f.parent.mkdir(parents=True, exist_ok=True)
 
-    with requests.get(url, headers={"referer": referer}, cookies=cookies) as r:
+    with requests.get(url, headers={"referer": referer}, cookies=cookies, stream=True) as r:
         if r.status_code == 200:
             # Find filename from header
             if not filename and "Content-Disposition" in r.headers:
@@ -65,16 +78,14 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                     if header_name[-1] == '"' or header_name[-1] == "'":
                         header_name = header_name[1:-1]
                     new_f = p / header_name
-                    if not new_f.exists():
-                        print(f'Find filename {header_name} in header. Using it instead..')
-                        f = new_f
-                    else:
-                        print(f'File {new_f.name} already exists!')
+                    if not (f := check_dupe(new_f)):
                         return
                         
             print(f'Downloading {f.name} from {url}...')
-            with f.open('wb') as fio:                
-                fio.write(r.content)
+            with f.open('wb') as fio:
+                for chunk in r.iter_content(chunk_size=8192):
+                    if chunk:       
+                        fio.write(chunk)
         else:
             print(f'Error! Get HTTP {r.status_code} from {url}.')
             # An empty file will still be craeted. This is by design.
