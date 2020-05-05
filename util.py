@@ -10,13 +10,15 @@ import re
 from urllib.parse import unquote
 
 def dump_json(mydict, filename):
-    if not filename.endswith('.json'):
-        filename = filename + '.json'
-    with open(filename, 'w', encoding='utf-8') as f:
+    filename = Path(filename)
+    if filename.suffix.lower() !='.json':
+        filename = filename.with_suffix('.json')
+    with filename.open('w', encoding='utf-8') as f:
         json.dump(mydict, f, ensure_ascii=False, indent=2)
 
 def load_json(filename):
-    with open(filename, 'r', encoding='utf-8') as f:
+    filename = Path(filename)
+    with filename.open('r', encoding='utf-8') as f:
         data = json.load(f)
     return data
 
@@ -75,7 +77,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
             if not filename and "Content-Disposition" in r.headers:
                 if m := re.search(r"filename=(.+)", r.headers["Content-Disposition"]):                    
                     header_name = m[1]
-                    if header_name[-1] == '"' or header_name[-1] == "'":
+                    if header_name[-1] == '"' and header_name[0] == '"' or header_name[-1] == "'" and header_name[0] == "'":
                         header_name = header_name[1:-1]
                     new_f = p / header_name
                     if not (f := check_dupe(new_f)):
@@ -88,8 +90,8 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                         fio.write(chunk)
         else:
             print(f'Error! Get HTTP {r.status_code} from {url}.')
-            # An empty file will still be craeted. This is by design.
-            f.open('wb').close()
+            # An empty file will still be created. This is by design.
+            f.with_suffix(f.suffix + '.broken').open('wb').close()
                 
                 
 
