@@ -89,7 +89,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                     if chunk:       
                         fio.write(chunk)
         else:
-            print(f'Error! Get HTTP {r.status_code} from {url}.')
+            print(f'[Error] Get HTTP {r.status_code} from {url}.')
             # An empty file will still be created. This is by design.
             f.with_suffix(f.suffix + '.broken').open('wb').close()
                 

@@ -26,7 +26,9 @@ def parse_entry(blog_id, id, save_folder='.'):
         download(img_url, Path(save_folder) / img_name)
 
 
-def parse_list(blog_id, start_entry, *, results=[], until=None, auto_iter=True):
+def parse_list(blog_id, start_entry, *, results=None, until=None, auto_iter=True):
+    if results is None: # Fuck python https://stackoverflow.com/questions/366422/
+        results = []    
     print(f'Parsing {blog_id} starting from {start_entry}...')
     myjson = requests.get(
         f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{start_entry}/neighbors?limit=100').json()
