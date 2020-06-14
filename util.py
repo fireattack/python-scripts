@@ -117,3 +117,7 @@ def remove_empty_folders(directory, remove_root=True): #Including root.
             remove_empty_folders(x, remove_root=True)
     if remove_root and not list(directory.iterdir()):
         directory.rmdir()
+
+if __name__ == "__main__":
+    import sys
+    download(*sys.argv[1:])        
