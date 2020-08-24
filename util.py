@@ -36,8 +36,10 @@ def get(url, headers=None, cookies=None, encoding='utf-8'):
     return BeautifulSoup(r.text, 'lxml')
 
 
-def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip',referer=None):
-    
+def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip',referer=None, placeholder=True):   
+    if dupe not in ['skip', 'overwrite', 'rename']:
+        raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite or rename).')        
+
     def check_dupe(filename):
         if not filename.exists():
             return filename        
@@ -55,6 +57,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                 i = i + 1
             print(f'[Warning] File already exists! Rename to {filename.name}.')
             return filename
+        
 
     if dry_run:
         return
@@ -88,10 +91,12 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:       
                         fio.write(chunk)
+            return 200
         else:
             print(f'[Error] Get HTTP {r.status_code} from {url}.')
-            # An empty file will still be created. This is by design.
-            f.with_suffix(f.suffix + '.broken').open('wb').close()
+            if placeholder:
+                f.with_suffix(f.suffix + '.broken').open('wb').close()
+            return 404
                 
                 
 

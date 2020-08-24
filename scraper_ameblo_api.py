@@ -65,9 +65,17 @@ def parse_list_new(blog_id, start_entry, until=None):
 def download_all(blog_id, save_folder='.', executor=None, until=None, last_entry='auto'):
 
     if last_entry == 'auto':
-        soup = get(f'https://ameblo.jp/{blog_id}/')
-        last_entry = re.search(r'entry-(\d+).html',
-                               soup.select_one(f'a[href*="{blog_id}/entry-"]')['href'])[1]
+        soup = get(f'https://ameblo.jp/{blog_id}/')        
+        if anchor := soup.select_one(f'a[href*="{blog_id}/entry-"]'):
+            last_entry = re.search(r'entry-(\d+).html', anchor['href'])[1]
+        else:
+            for s in soup('script'):
+                if s.text.startswith('window.INIT_DATA'):
+                    if m := re.search(r'entryMap.+?"(\d+)"', s.text):
+                        last_entry = m[1]
+                        break
+        if last_entry == 'auto':
+            raise Exception(f'[Error] cannot detect last entry for blog {blog_id}!')
         print(f'Info: {blog_id}\'s newest entry is {last_entry}.')
     if last_entry == until:
         print('No new update.')
