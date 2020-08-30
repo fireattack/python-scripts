@@ -36,27 +36,27 @@ def get(url, headers=None, cookies=None, encoding='utf-8'):
     return BeautifulSoup(r.text, 'lxml')
 
 
-def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip',referer=None, placeholder=True):   
+def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip',referer=None, placeholder=True, prefix=''):
     if dupe not in ['skip', 'overwrite', 'rename']:
         raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite or rename).')        
 
-    def check_dupe(filename):
-        if not filename.exists():
-            return filename        
+    def check_dupe(f):
+        if not f.exists():
+            return f        
         if dupe == 'overwrite':
-            print(f'[Warning] File {filename.name} already exists! Overwriting...')
-            return filename
+            print(f'[Warning] File {f.name} already exists! Overwriting...')
+            return f
         if dupe == 'skip':
-            print(f'[Warning] File {filename.name} already exists! Skip.')
+            print(f'[Warning] File {f.name} already exists! Skip.')
             return None
         if dupe == 'rename':            
             i = 2
-            stem = filename.stem
-            while filename.exists():
-                filename = filename.with_name(f'{stem}_{i}{filename.suffix}')
+            stem = f.stem
+            while f.exists():
+                f = f.with_name(f'{stem}_{i}{f.suffix}')
                 i = i + 1
-            print(f'[Warning] File already exists! Rename to {filename.name}.')
-            return filename
+            print(f'[Warning] File already exists! Rename to {f.name}.')
+            return f
         
 
     if dry_run:
@@ -66,6 +66,8 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
     else: # If not, create a f using save_path + web_name for now.
         p = Path(save_path)
         web_name = unquote(url.split('?')[0].split('/')[-1])
+        if prefix:
+            web_name = f'{prefix} ' + web_name
         f = p / safeify(web_name)
     
     if f.suffix.lower() not in ['.php', '']:
@@ -78,11 +80,13 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
         if r.status_code == 200:
             # Find filename from header
             if not filename and "Content-Disposition" in r.headers:
-                if m := re.search(r"filename=(.+)", r.headers["Content-Disposition"]):                    
+                if m := re.search(r"filename=(.+)", r.headers["Content-Disposition"]):
                     header_name = m[1]
                     if header_name[-1] == '"' and header_name[0] == '"' or header_name[-1] == "'" and header_name[0] == "'":
                         header_name = header_name[1:-1]
-                    new_f = p / header_name
+                    if prefix:
+                        header_name = f'{prefix} ' + header_name
+                    new_f = p / safeify(header_name)
                     if not (f := check_dupe(new_f)):
                         return
                         
