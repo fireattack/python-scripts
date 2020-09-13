@@ -11,19 +11,21 @@ from pathlib import Path
 
 
 def parse_entry(blog_id, id, save_folder='.'):
+    # print(f'Processing {id}...')
     data = requests.get(
         f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{id}/images').json()
-
-    for idx, img in enumerate(data['data']):
-        img_url = urljoin('https://stat.ameba.jp/', img['imgUrl'])
-        img_url = re.sub(r'^(.+)\?(.+)$', r'\1', img_url)  # Remove parameters
-        img_url = re.sub(r'\/t[0-9]*_([^/]*)$', r'/o\1', img_url)
-        date = re.search(r'user_images/(\d+)/', img_url)[1]
-        file_name = img_url.split('/')[-1]
-        desc = img['title']
-        img_name = safeify(f'{date} {id}_{desc}_{idx+1} {file_name}') if len(
-            data['data']) > 1 else safeify(f'{date} {id}_{desc} {file_name}')
-        download(img_url, Path(save_folder) / img_name)
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:        
+        for idx, img in enumerate(data['data']):
+            img_url = urljoin('https://stat.ameba.jp/', img['imgUrl'])
+            img_url = re.sub(r'^(.+)\?(.+)$', r'\1', img_url)  # Remove parameters
+            img_url = re.sub(r'\/t[0-9]*_([^/]*)$', r'/o\1', img_url)
+            date = re.search(r'user_images/(\d+)/', img_url)[1]
+            file_name = img_url.split('/')[-1]
+            desc = img['title']
+            img_name = safeify(f'{date} {id}_{desc}_{idx+1} {file_name}') if len(
+                data['data']) > 1 else safeify(f'{date} {id}_{desc} {file_name}')
+            ex.submit(download, img_url, Path(save_folder) / img_name)
 
 
 def parse_list(blog_id, start_entry, *, results=None, until=None, auto_iter=True):
@@ -81,10 +83,13 @@ def download_all(blog_id, save_folder='.', executor=None, until=None, last_entry
         print('No new update.')
         return
     results = parse_list(blog_id, last_entry, results=[], until=until)
+    if not results:
+        print('Get 0 entry. Exit.')
+        return
     print(f'Get {len(results)} entries. Start downloading..')
     shutdown_executor_inside = False
     if not executor:
-        executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
         shutdown_executor_inside = True
     for id in results:
         executor.submit(parse_entry, blog_id, id, save_folder)
