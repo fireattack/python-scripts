@@ -24,7 +24,7 @@ def load_json(filename):
 
 def safeify(name):
     template = {u'\\': u'＼', u'/': u'／', u':': u'：', u'*': u'＊',
-                u'?': u'？', u'"': u'＂', u'<': u'＜', u'>': u'＞', u'|': u'｜','\n':'','\r':''}
+                u'?': u'？', u'"': u'＂', u'<': u'＜', u'>': u'＞', u'|': u'｜','\n':'','\r':'','\t':''}
     for illegal in template:
         name = name.replace(illegal, template[illegal])
     return name
@@ -36,7 +36,7 @@ def get(url, headers=None, cookies=None, encoding='utf-8'):
     return BeautifulSoup(r.text, 'lxml')
 
 
-def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip',referer=None, placeholder=True, prefix=''):
+def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip',referer=None, placeholder=True, prefix='', verbose=2):
     if dupe not in ['skip', 'overwrite', 'rename']:
         raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite or rename).')        
 
@@ -44,10 +44,12 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
         if not f.exists():
             return f        
         if dupe == 'overwrite':
-            print(f'[Warning] File {f.name} already exists! Overwriting...')
+            if verbose > 0:
+                print(f'[Warning] File {f.name} already exists! Overwriting...')
             return f
         if dupe == 'skip':
-            print(f'[Warning] File {f.name} already exists! Skip.')
+            if verbose > 1:
+                print(f'[Warning] File {f.name} already exists! Skip.')
             return None
         if dupe == 'rename':            
             i = 2
@@ -55,12 +57,15 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
             while f.exists():
                 f = f.with_name(f'{stem}_{i}{f.suffix}')
                 i = i + 1
-            print(f'[Warning] File already exists! Rename to {f.name}.')
+            if verbose > 0:
+                print(f'[Warning] File already exists! Rename to {f.name}.')
             return f
         
-
     if dry_run:
+        if verbose > 0:
+            print(f'[Info only] URL: {url}')
         return
+
     if filename: # If filename is supplied
         f = Path(filename)
     else: # If not, create a f using save_path + web_name for now.
@@ -89,15 +94,16 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                     new_f = p / safeify(header_name)
                     if not (f := check_dupe(new_f)):
                         return
-                        
-            print(f'Downloading {f.name} from {url}...')
+            if verbose > 0:
+                print(f'Downloading {f.name} from {url}...')
             with f.open('wb') as fio:
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:       
                         fio.write(chunk)
             return 200
         else:
-            print(f'[Error] Get HTTP {r.status_code} from {url}.')
+            if verbose > 0:
+                print(f'[Error] Get HTTP {r.status_code} from {url}.')
             if placeholder:
                 f.with_suffix(f.suffix + '.broken').open('wb').close()
             return 404
