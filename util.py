@@ -96,10 +96,14 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                         return
             if verbose > 0:
                 print(f'Downloading {f.name} from {url}...')
-            with f.open('wb') as fio:
+            temp_file = f.with_name(f.name + '.dl')
+            while temp_file.exists():
+                temp_file = temp_file.with_name(temp_file.name + '.dl')
+            with temp_file.open('wb') as fio:
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:       
                         fio.write(chunk)
+            temp_file.rename(f)
             return 200
         else:
             if verbose > 0:
