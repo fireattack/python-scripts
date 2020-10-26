@@ -9,6 +9,13 @@ import json
 import re
 from urllib.parse import unquote
 
+def copy(data):
+    import win32clipboard
+    win32clipboard.OpenClipboard()
+    win32clipboard.EmptyClipboard()
+    win32clipboard.SetClipboardText(data, win32clipboard.CF_UNICODETEXT)
+    win32clipboard.CloseClipboard()
+
 def dump_json(mydict, filename):
     filename = Path(filename)
     if filename.suffix.lower() !='.json':
@@ -40,7 +47,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
     if dupe not in ['skip', 'overwrite', 'rename']:
         raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite or rename).')        
 
-    def check_dupe(f):
+    def check_dupe(f, dupe=dupe):
         if not f.exists():
             return f        
         if dupe == 'overwrite':
@@ -84,16 +91,19 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
     with requests.get(url, headers={"referer": referer}, cookies=cookies, stream=True) as r:
         if r.status_code == 200:
             # Find filename from header
-            if not filename and "Content-Disposition" in r.headers:
-                if m := re.search(r"filename=(.+)", r.headers["Content-Disposition"]):
-                    header_name = m[1]
-                    if header_name[-1] == '"' and header_name[0] == '"' or header_name[-1] == "'" and header_name[0] == "'":
-                        header_name = header_name[1:-1]
-                    if prefix:
-                        header_name = f'{prefix} ' + header_name
-                    new_f = p / safeify(header_name)
-                    if not (f := check_dupe(new_f)):
-                        return
+            if not filename:
+                if "Content-Disposition" in r.headers:
+                    if m := re.search(r"filename=(.+)", r.headers["Content-Disposition"]):
+                        header_name = m[1]
+                        header_name = re.sub(r'^([\"\'])(.+)\1$', r'\2', header_name)
+                        if prefix:
+                            header_name = f'{prefix} ' + header_name
+                        f = p / safeify(header_name)
+                if f.suffix == '' and 'Content-Type' in r.headers:
+                    header_suffix = '.' + r.headers['Content-Type'].split('/')[-1].replace('jpeg','jpg')
+                    f = f.with_suffix(header_suffix)
+                if not (f := check_dupe(f)):
+                    return
             if verbose > 0:
                 print(f'Downloading {f.name} from {url}...')
             temp_file = f.with_name(f.name + '.dl')
@@ -103,15 +113,21 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:       
                         fio.write(chunk)
+            f = check_dupe(f) # Check again. Because some other programs may create the file during downloading
+            if not f: # this means skip. Remove what we just downloaded.
+                temp_file.unlink()
+                return
+            if f.exists(): # this means overwrite. So remove before rename.
+                f.unlink()
+            # In other case, either f has been renamed or no conflict. So just rename.
             temp_file.rename(f)
-            return 200
+            return r.status_code
         else:
             if verbose > 0:
                 print(f'[Error] Get HTTP {r.status_code} from {url}.')
             if placeholder:
                 f.with_suffix(f.suffix + '.broken').open('wb').close()
-            return 404
-                
+            return r.status_code
                 
 
 def hello(a, b):
