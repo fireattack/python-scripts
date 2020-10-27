@@ -55,7 +55,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                 print(f'[Warning] File {f.name} already exists! Overwriting...')
             return f
         if dupe == 'skip':
-            if verbose > 1:
+            if verbose > 0:
                 print(f'[Warning] File {f.name} already exists! Skip.')
             return None
         if dupe == 'rename':            
@@ -104,8 +104,10 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                     f = f.with_suffix(header_suffix)
                 if not (f := check_dupe(f)):
                     return
-            if verbose > 0:
+            if verbose > 1:
                 print(f'Downloading {f.name} from {url}...')
+            elif verbose > 0:
+                print(f'Downloading {f.name}...')
             temp_file = f.with_name(f.name + '.dl')
             while temp_file.exists():
                 temp_file = temp_file.with_name(temp_file.name + '.dl')
@@ -123,7 +125,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
             temp_file.rename(f)
             return r.status_code
         else:
-            if verbose > 0:
+            if verbose > -1:
                 print(f'[Error] Get HTTP {r.status_code} from {url}.')
             if placeholder:
                 f.with_suffix(f.suffix + '.broken').open('wb').close()
