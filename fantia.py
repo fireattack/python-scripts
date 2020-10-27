@@ -73,6 +73,7 @@ class FantiaDownloader:
                         for idx, p in enumerate(photos, 1):
                             img_url = p['url']['original']
                             stem, ext = getWebName(img_url)
+                            # Clean up the filename; remove all the UUID-ish garbage
                             stem = re.sub(r'^[0-9a-fA-F]{8}_(.+)$', r'\1', stem)
                             stem = re.sub(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', '', stem)
                             idx_string = '_' + str(idx).zfill(len(str(len(photos)))) if len(photos) > 1 else ''
