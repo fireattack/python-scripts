@@ -92,6 +92,11 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
         if r.status_code == 200:
             # Find filename from header
             if not filename:
+                if r.url != url: # Deal with 302
+                    web_name = unquote(r.url.split('?')[0].split('/')[-1])
+                    if prefix:
+                        web_name = f'{prefix} ' + web_name
+                    f = p / safeify(web_name)
                 if "Content-Disposition" in r.headers:
                     if m := re.search(r"filename=(.+)", r.headers["Content-Disposition"]):
                         header_name = m[1]
