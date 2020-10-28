@@ -39,7 +39,7 @@ class FantiaDownloader:
                 page += 1
             else:
                 break
-
+        results = len(list(dict.fromkeys(results)))
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
             for id in results:
                 if self.skip_existing and id in existing_ids:
@@ -79,9 +79,9 @@ class FantiaDownloader:
                             idx_string = '_' + str(idx).zfill(len(str(len(photos)))) if len(photos) > 1 else ''
                             stem = f'{id} {cid}{idx_string} {stem}'.strip()
                             ex.submit(download, img_url, filename=self.output / f'{stem}.{ext}', verbose=1)
-                    if 'download_uri' in c: #TODO: needs testing
-                        dl_url = urljoin('https://fantia.jp', c['download_uri']) + '?ofn=' + c['filename']
-                        ex.submit(download, dl_url, prefix=id, save_path=self.output, verbose=1)
+                    if 'download_uri' in c:
+                        dl_url = urljoin('https://fantia.jp', c['download_uri'])
+                        ex.submit(download, dl_url, filename=self.output / f'{id} {cid} {c["filename"]}', cookies={"_session_id": self.key}, verbose=1)
 
 if __name__ == "__main__":
     pass
