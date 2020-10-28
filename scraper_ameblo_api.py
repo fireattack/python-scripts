@@ -14,8 +14,8 @@ def parse_entry(blog_id, id, save_folder='.'):
     # print(f'Processing {id}...')
     data = requests.get(
         f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{id}/images').json()
-    
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:        
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
         for idx, img in enumerate(data['data']):
             img_url = urljoin('https://stat.ameba.jp/', img['imgUrl'])
             img_url = re.sub(r'^(.+)\?(.+)$', r'\1', img_url)  # Remove parameters
@@ -30,7 +30,7 @@ def parse_entry(blog_id, id, save_folder='.'):
 
 def parse_list(blog_id, start_entry, *, results=None, until=None, auto_iter=True):
     if results is None: # Fuck python https://stackoverflow.com/questions/366422/
-        results = []    
+        results = []
     print(f'Parsing {blog_id} starting from {start_entry}...')
     myjson = requests.get(
         f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{start_entry}/neighbors?limit=100').json()
@@ -46,7 +46,7 @@ def parse_list(blog_id, start_entry, *, results=None, until=None, auto_iter=True
         parse_list(blog_id, next_id, results=results, until=until)
     return results
 
-# Without using iteration for better readability 
+# Without using iteration for better readability
 def parse_list_new(blog_id, start_entry, until=None):
     results = []
     while True:
@@ -65,9 +65,8 @@ def parse_list_new(blog_id, start_entry, until=None):
 
 
 def download_all(blog_id, save_folder='.', executor=None, until=None, last_entry='auto'):
-
     if last_entry == 'auto':
-        soup = get(f'https://ameblo.jp/{blog_id}/')        
+        soup = get(f'https://ameblo.jp/{blog_id}/')
         if anchor := soup.select_one(f'a[href*="{blog_id}/entry-"]'):
             last_entry = re.search(r'entry-(\d+).html', anchor['href'])[1]
         else:
