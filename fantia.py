@@ -11,12 +11,12 @@ HTML_POSTLIST = "https://fantia.jp/fanclubs/{}/posts?page={}"
 
 class FantiaDownloader:
 
-    def __init__(self, fanclub, output, key):
+    def __init__(self, fanclub, output, key, skip_existing=True):
         super().__init__()
         self.key = key
         self.fanclub = fanclub
         self.output = Path(output)
-        self.skip_existing = True
+        self.skip_existing = skip_existing
 
     def fetch(self, url):
         return requests.get(url, cookies={"_session_id": self.key})
@@ -39,7 +39,7 @@ class FantiaDownloader:
                 page += 1
             else:
                 break
-        results = len(list(dict.fromkeys(results)))
+        results = list(dict.fromkeys(results))
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
             for id in results:
                 if self.skip_existing and id in existing_ids:
