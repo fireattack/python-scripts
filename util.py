@@ -163,9 +163,3 @@ def remove_empty_folders(directory, remove_root=True): #Including root.
 if __name__ == "__main__":
     import sys
     download(*sys.argv[1:])
-
-
-def write_to_file(str, filepath):
-    filepath = Path(filepath)
-    with filepath.open('w', encoding='utf8') as f:
-        f.write(str)
