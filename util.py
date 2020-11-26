@@ -43,6 +43,14 @@ def get(url, headers=None, cookies=None, encoding='utf-8'):
     return BeautifulSoup(r.text, 'lxml')
 
 
+def ensure_nonexist(f):
+    i = 2
+    stem = f.stem
+    while f.exists():
+        f = f.with_name(f'{stem}_{i}{f.suffix}')
+        i = i + 1
+    return f    
+
 def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip',referer=None, placeholder=True, prefix='', verbose=2):
     if dupe not in ['skip', 'overwrite', 'rename']:
         raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite or rename).')        
