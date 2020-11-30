@@ -106,9 +106,14 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                         web_name = f'{prefix} ' + web_name
                     f = p / safeify(web_name)
                 if "Content-Disposition" in r.headers:
-                    if m := re.search(r"filename=(.+)", r.headers["Content-Disposition"]):
-                        header_name = m[1]
-                        header_name = re.sub(r'^([\"\'])(.+)\1$', r'\2', header_name)
+                    from cgi import parse_header
+                    _, params = parse_header(r.headers["Content-Disposition"])
+                    header_name = ''
+                    if 'filename*' in params:
+                        header_name = unquote(params['filename*'].lstrip("UTF-8''"))
+                    elif 'filename' in params:
+                        header_name = params['filename']
+                    if header_name:
                         if prefix:
                             header_name = f'{prefix} ' + header_name
                         f = p / safeify(header_name)
