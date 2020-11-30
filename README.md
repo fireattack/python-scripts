@@ -31,7 +31,7 @@ downloader.downloadAll()
 
 ## `util.py`
 
-Some utilit functions. Read the code to get the idea. Some highlights:
+Some utility functions mainly for myself. Read the code to get the idea. Some highlights:
 * download - a generic downloader
 
 ..well that's it. Others are some super simple stuff.
