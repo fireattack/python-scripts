@@ -49,15 +49,15 @@ def ensure_nonexist(f):
     while f.exists():
         f = f.with_name(f'{stem}_{i}{f.suffix}')
         i = i + 1
-    return f    
+    return f
 
 def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip',referer=None, placeholder=True, prefix='', verbose=2):
     if dupe not in ['skip', 'overwrite', 'rename']:
-        raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite or rename).')        
+        raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite or rename).')
 
     def check_dupe(f, dupe=dupe):
         if not f.exists():
-            return f        
+            return f
         if dupe == 'overwrite':
             if verbose > 0:
                 print(f'[Warning] File {f.name} already exists! Overwriting...')
@@ -66,7 +66,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
             if verbose > 0:
                 print(f'[Warning] File {f.name} already exists! Skip.')
             return None
-        if dupe == 'rename':            
+        if dupe == 'rename':
             i = 2
             stem = f.stem
             while f.exists():
@@ -75,7 +75,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
             if verbose > 0:
                 print(f'[Warning] File already exists! Rename to {f.name}.')
             return f
-        
+
     if dry_run:
         if verbose > 0:
             print(f'[Info only] URL: {url}')
@@ -89,7 +89,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
         if prefix:
             web_name = f'{prefix} ' + web_name
         f = p / safeify(web_name)
-    
+
     if f.suffix.lower() not in ['.php', '']:
         if not (f := check_dupe(f)):
             return
@@ -131,7 +131,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                 temp_file = temp_file.with_name(temp_file.name + '.dl')
             with temp_file.open('wb') as fio:
                 for chunk in r.iter_content(chunk_size=8192):
-                    if chunk:       
+                    if chunk:
                         fio.write(chunk)
             f = check_dupe(f) # Check again. Because some other programs may create the file during downloading
             if not f: # this means skip. Remove what we just downloaded.
@@ -148,7 +148,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
             if placeholder:
                 f.with_suffix(f.suffix + '.broken').open('wb').close()
             return r.status_code
-                
+
 
 def hello(a, b):
     print(f'hello: {a} and {b}')
