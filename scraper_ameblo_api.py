@@ -1,19 +1,17 @@
 import re
 from pathlib import Path
-import lxml
 import requests
-from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-
-from util import safeify, download, get
 import concurrent.futures
-from pathlib import Path
+import json
+from dateutil import parser
+
+from util import safeify, download, get, dump_json
 
 
-def parse_entry(blog_id, id, save_folder='.'):
+def download_image(blog_id, id, save_folder='.'):
     # print(f'Processing {id}...')
-    data = requests.get(
-        f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{id}/images').json()
+    data = requests.get(f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{id}/images').json()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
         for idx, img in enumerate(data['data']):
@@ -27,27 +25,37 @@ def parse_entry(blog_id, id, save_folder='.'):
                 data['data']) > 1 else safeify(f'{date} {id}_{desc} {file_name}')
             ex.submit(download, img_url, Path(save_folder) / img_name)
 
+def download_text(blog_id, id, save_folder='.'):
+    # print(f'Processing {id}...')
+    url = f'https://ameblo.jp/{blog_id}/entry-{id}.html'
+    soup = get(url)    
+    data = None
+    for s in soup('script'):
+        if 'window.INIT_DATA' in s.text:
+            data = s.text
+            break
+    if data:
+        print('.', end="", flush=True)
+        data = json.loads(re.search(r'window\.INIT_DATA *= *(.+);window\.RESOURCE_BASE_URL', data)[1])
+        b = data['entryState']['entryMap'][str(id)]
+        title = b['entry_title']
+        text = b['entry_text']
+        time = b['entry_created_datetime']
+        date = parser.parse(time).strftime('%Y%m%d_%H%M%S')        
+        #Dump
+        text_folder = Path(save_folder) / 'text'
+        text_folder.mkdir(exist_ok=True)
+        html = text_folder / safeify(f'{date} {id}_{title}.html')
+        html.write_text(text, encoding='utf8')
+        metadata_folder = Path(save_folder) / 'metadata'
+        metadata_folder.mkdir(exist_ok=True)
+        metadata = metadata_folder / safeify(f'{date} {id}_{title}.json')
+        dump_json(b, metadata)
+    else:
+        print(f'[E] cannot fetch data from {url}!')
 
-def parse_list(blog_id, start_entry, *, results=None, until=None, auto_iter=True):
-    if results is None: # Fuck python https://stackoverflow.com/questions/366422/
-        results = []
-    print(f'Parsing {blog_id} starting from {start_entry}...')
-    myjson = requests.get(
-        f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{start_entry}/neighbors?limit=100').json()
-    for entry in myjson['data']:
-        id = entry["entryId"]
-        if until and str(id) == str(until):
-            print(f'Reached last record {until}! Stopping..')
-            return results
-        if not id in results:
-            results.append(id)
-    if auto_iter and myjson['paging']['nextUrl']:
-        next_id = re.search(r'/entries/(\d+)/', myjson['paging']['nextUrl'])[1]
-        parse_list(blog_id, next_id, results=results, until=until)
-    return results
 
-# Without using iteration for better readability
-def parse_list_new(blog_id, start_entry, until=None):
+def parse_list(blog_id, start_entry, until=None):
     results = []
     while True:
         print(f'Parsing {blog_id} starting from {start_entry}...')
@@ -64,7 +72,7 @@ def parse_list_new(blog_id, start_entry, until=None):
         start_entry = re.search(r'/entries/(\d+)/', myjson['paging']['nextUrl'])[1]
 
 
-def download_all(blog_id, save_folder='.', executor=None, until=None, last_entry='auto'):
+def download_all(blog_id, save_folder='.', executor=None, until=None, last_entry='auto', download_type='image'):
     if last_entry == 'auto':
         soup = get(f'https://ameblo.jp/{blog_id}/')
         if anchor := soup.select_one(f'a[href*="{blog_id}/entry-"]'):
@@ -81,7 +89,7 @@ def download_all(blog_id, save_folder='.', executor=None, until=None, last_entry
     if last_entry == until:
         print('No new update.')
         return
-    results = parse_list(blog_id, last_entry, results=[], until=until)
+    results = parse_list(blog_id, last_entry, until=until)
     if not results:
         print('Get 0 entry. Exit.')
         return
@@ -91,6 +99,9 @@ def download_all(blog_id, save_folder='.', executor=None, until=None, last_entry
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
         shutdown_executor_inside = True
     for id in results:
-        executor.submit(parse_entry, blog_id, id, save_folder)
+        if download_type in ['all', 'image']:
+            executor.submit(download_image, blog_id, id, save_folder)
+        if download_type in ['all', 'text']:
+            executor.submit(download_text, blog_id, id, save_folder)
     if shutdown_executor_inside:
         executor.shutdown()
