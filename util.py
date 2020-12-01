@@ -51,13 +51,27 @@ def ensure_nonexist(f):
         i = i + 1
     return f
 
-def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip',referer=None, placeholder=True, prefix='', verbose=2):
-    if dupe not in ['skip', 'overwrite', 'rename']:
+def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip_same_size',referer=None, placeholder=True, prefix='', verbose=2):
+    if dupe not in ['skip', 'overwrite', 'rename', 'skip_same_size']:
         raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite or rename).')
 
-    def check_dupe(f, dupe=dupe):
+    def check_dupe(f, dupe=dupe, size=None):
         if not f.exists():
             return f
+        if dupe == 'skip_same_size':
+            if size:
+                existing_size = f.stat().st_size
+                if size == existing_size:
+                    if verbose > 0:
+                        print(f'[Warning] File {f.name} already exists and have same size! Skip.')
+                    return None
+                else:
+                    f = ensure_nonexist(f)
+                    if verbose > 0:
+                        print(f'[Warning] File already exists but the size doesn\'t match. Rename to {f.name}.')
+                    return f
+            else: # Silently skip check for later, if no size is given
+                return f
         if dupe == 'overwrite':
             if verbose > 0:
                 print(f'[Warning] File {f.name} already exists! Overwriting...')
@@ -67,11 +81,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                 print(f'[Warning] File {f.name} already exists! Skip.')
             return None
         if dupe == 'rename':
-            i = 2
-            stem = f.stem
-            while f.exists():
-                f = f.with_name(f'{stem}_{i}{f.suffix}')
-                i = i + 1
+            f = ensure_nonexist(f)
             if verbose > 0:
                 print(f'[Warning] File already exists! Rename to {f.name}.')
             return f
@@ -120,8 +130,10 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                 if f.suffix == '' and 'Content-Type' in r.headers:
                     header_suffix = '.' + r.headers['Content-Type'].split('/')[-1].replace('jpeg','jpg')
                     f = f.with_suffix(header_suffix)
-                if not (f := check_dupe(f)):
-                    return
+            expected_size = int(r.headers['Content-length'])
+            # Just check it again.
+            if not (f := check_dupe(f, size=expected_size)):
+                return
             if verbose > 1:
                 print(f'Downloading {f.name} from {url}...')
             elif verbose > 0:
