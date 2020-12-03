@@ -1,3 +1,4 @@
+import builtins
 import lxml
 import requests
 from bs4 import BeautifulSoup
@@ -51,44 +52,42 @@ def ensure_nonexist(f):
         i = i + 1
     return f
 
-def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip_same_size',referer=None, placeholder=True, prefix='', verbose=2):
+def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip_same_size', referer=None, placeholder=True, prefix='', verbose=2):
     if dupe not in ['skip', 'overwrite', 'rename', 'skip_same_size']:
         raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite or rename).')
 
-    def check_dupe(f, dupe=dupe, size=None):
+    def print(s, verbose_level, only=False):
+        if (only and verbose == verbose_level) or (not only and verbose >= verbose_level):
+            builtins.print(s)
+
+    def check_dupe(f, dupe=dupe, size=0):
         if not f.exists():
             return f
         if dupe == 'skip_same_size':
             if size:
                 existing_size = f.stat().st_size
                 if size == existing_size:
-                    if verbose > 0:
-                        print(f'[Warning] File {f.name} already exists and have same size! Skip.')
+                    print(f'[Warning] File {f.name} already exists and have same size! Skip.', 1)
                     return None
                 else:
                     f = ensure_nonexist(f)
-                    if verbose > 0:
-                        print(f'[Warning] File already exists but the size doesn\'t match. Rename to {f.name}.')
+                    print(f'[Warning] File already exists, and the size doesn\'t match (exiting: {existing_size}; new: {size}). Rename.', 1)
                     return f
-            else: # Silently skip check for later, if no size is given
-                return f
+            else:
+                dupe = 'skip' # if we can't get size, just assume it's the same so we skip.
         if dupe == 'overwrite':
-            if verbose > 0:
-                print(f'[Warning] File {f.name} already exists! Overwriting...')
+            print(f'[Warning] File {f.name} already exists! Overwriting...', 1)
             return f
         if dupe == 'skip':
-            if verbose > 0:
-                print(f'[Warning] File {f.name} already exists! Skip.')
+            print(f'[Warning] File {f.name} already exists! Skip.', 1)
             return None
         if dupe == 'rename':
             f = ensure_nonexist(f)
-            if verbose > 0:
-                print(f'[Warning] File already exists! Rename to {f.name}.')
+            print(f'[Warning] File already exists! Rename to {f.name}.', 1)
             return f
 
     if dry_run:
-        if verbose > 0:
-            print(f'[Info only] URL: {url}')
+        print(f'[Info only] URL: {url}', 1)
         return
 
     if filename: # If filename is supplied
@@ -100,7 +99,9 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
             web_name = f'{prefix} ' + web_name
         f = p / safeify(web_name)
 
-    if f.suffix.lower() not in ['.php', '']:
+    # Check if file exists for dupe=skip and rename. Other dupe methods will check later.
+    # Also don't check if filename is likely change by response header.
+    if dupe in ['skip', 'rename'] and f.suffix.lower() not in ['.php', '']:
         if not (f := check_dupe(f)):
             return
 
@@ -108,14 +109,13 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
 
     with requests.get(url, headers={"referer": referer}, cookies=cookies, stream=True) as r:
         if r.status_code == 200:
-            # Find filename from header
-            if not filename:
-                if r.url != url: # Deal with 302
+            if not filename: # Try to find filename using the response again, is not specified
+                if r.url != url: # Get filename again from URL for potential 302/301
                     web_name = unquote(r.url.split('?')[0].split('/')[-1])
                     if prefix:
                         web_name = f'{prefix} ' + web_name
                     f = p / safeify(web_name)
-                if "Content-Disposition" in r.headers:
+                if "Content-Disposition" in r.headers: # Get filename from the header
                     from cgi import parse_header
                     _, params = parse_header(r.headers["Content-Disposition"])
                     header_name = ''
@@ -127,25 +127,31 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                         if prefix:
                             header_name = f'{prefix} ' + header_name
                         f = p / safeify(header_name)
-                if f.suffix == '' and 'Content-Type' in r.headers:
+                if f.suffix == '' and 'Content-Type' in r.headers: # Also find the file extension
                     header_suffix = '.' + r.headers['Content-Type'].split('/')[-1].replace('jpeg','jpg')
                     f = f.with_suffix(header_suffix)
-            expected_size = int(r.headers['Content-length'])
-            # Just check it again.
+            expected_size = int(r.headers.get('Content-length', 0))
+            if dupe == 'skip_same_size':
+                if expected_size == 0:
+                    print('[Warning] Cannot get content-length. Omit size check', 2)
+                elif r.headers.get('content-encoding', None): # Ignore content-length if it's compressed.
+                    print('[Warning] content is compressed. Omit size check.', 2)
+                    expected_size = 0
+
+            # Check it again before download starts.
+            # Note: if dupe=overwrite, it will check (and print) twice, before and after downloading. This is by design.
             if not (f := check_dupe(f, size=expected_size)):
                 return
-            if verbose > 1:
-                print(f'Downloading {f.name} from {url}...')
-            elif verbose > 0:
-                print(f'Downloading {f.name}...')
+            print(f'Downloading {f.name} from {url}...', 2)
+            print(f'Downloading {f.name}...', 1, only=True)
             temp_file = f.with_name(f.name + '.dl')
-            while temp_file.exists():
-                temp_file = temp_file.with_name(temp_file.name + '.dl')
+            temp_file = ensure_nonexist(temp_file)
             with temp_file.open('wb') as fio:
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:
                         fio.write(chunk)
-            f = check_dupe(f) # Check again. Because some other programs may create the file during downloading
+            downloaded_size = temp_file.stat().st_size
+            f = check_dupe(f, size=downloaded_size) # Check again. Because some other programs may create the file during downloading
             if not f: # this means skip. Remove what we just downloaded.
                 temp_file.unlink()
                 return
@@ -155,8 +161,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
             temp_file.rename(f)
             return r.status_code
         else:
-            if verbose > -1:
-                print(f'[Error] Get HTTP {r.status_code} from {url}.')
+            print(f'[Error] Get HTTP {r.status_code} from {url}.', 0)
             if placeholder:
                 f.with_suffix(f.suffix + '.broken').open('wb').close()
             return r.status_code
