@@ -8,6 +8,14 @@ from dateutil import parser
 
 from util import safeify, download, get, dump_json
 
+def load_init_data(soup):
+    for script in soup('script'):
+        if 'window.INIT_DATA' in script.text:
+            return json.loads(re.search(r'window\.INIT_DATA *= *(.+);window\.RESOURCE_BASE_URL', script.text)[1])
+    return None
+
+def first(my_dict):
+    return list(my_dict.values())[0]
 
 def download_image(blog_id, id, save_folder='.'):
     # print(f'Processing {id}...')
@@ -23,29 +31,27 @@ def download_image(blog_id, id, save_folder='.'):
             desc = img['title']
             img_name = safeify(f'{date} {id}_{desc}_{idx+1} {file_name}') if len(
                 data['data']) > 1 else safeify(f'{date} {id}_{desc} {file_name}')
-            ex.submit(download, img_url, Path(save_folder) / img_name)
+            ex.submit(download, img_url, Path(save_folder) / img_name, dupe='skip', verbose=1)
 
 def download_text(blog_id, id, save_folder='.'):
     # print(f'Processing {id}...')
     url = f'https://ameblo.jp/{blog_id}/entry-{id}.html'
-    soup = get(url)    
-    data = None
-    for s in soup('script'):
-        if 'window.INIT_DATA' in s.text:
-            data = s.text
-            break
+    soup = get(url)
+    data = load_init_data(soup)
     if data:
         print('.', end="", flush=True)
-        data = json.loads(re.search(r'window\.INIT_DATA *= *(.+);window\.RESOURCE_BASE_URL', data)[1])
         b = data['entryState']['entryMap'][str(id)]
         title = b['entry_title']
         text = b['entry_text']
         time = b['entry_created_datetime']
-        date = parser.parse(time).strftime('%Y%m%d_%H%M%S')        
+        date = parser.parse(time).strftime('%Y%m%d_%H%M%S')
         #Dump
         text_folder = Path(save_folder) / 'text'
         text_folder.mkdir(exist_ok=True)
         html = text_folder / safeify(f'{date} {id}_{title}.html')
+        if html.exists():
+            print(f'{html.name} Already exists! Ignore.')
+            return
         html.write_text(text, encoding='utf8')
         metadata_folder = Path(save_folder) / 'metadata'
         metadata_folder.mkdir(exist_ok=True)
@@ -54,8 +60,8 @@ def download_text(blog_id, id, save_folder='.'):
     else:
         print(f'[E] cannot fetch data from {url}!')
 
-
-def parse_list(blog_id, start_entry, until=None):
+# This API only list posts with images. Abandoned.
+def parse_image_list(blog_id, start_entry, until=None):
     results = []
     while True:
         print(f'Parsing {blog_id} starting from {start_entry}...')
@@ -72,28 +78,40 @@ def parse_list(blog_id, start_entry, until=None):
         start_entry = re.search(r'/entries/(\d+)/', myjson['paging']['nextUrl'])[1]
 
 
-def download_all(blog_id, save_folder='.', executor=None, until=None, last_entry='auto', download_type='image'):
-    if last_entry == 'auto':
+def parse_list(blog_id, limit=10, until=None):
+    try: # Get blog_num_id
         soup = get(f'https://ameblo.jp/{blog_id}/')
-        if anchor := soup.select_one(f'a[href*="{blog_id}/entry-"]'):
-            last_entry = re.search(r'entry-(\d+).html', anchor['href'])[1]
-        else:
-            for s in soup('script'):
-                if s.text.startswith('window.INIT_DATA'):
-                    if m := re.search(r'entryMap.+?"(\d+)"', s.text):
-                        last_entry = m[1]
-                        break
-        if last_entry == 'auto':
-            raise Exception(f'[Error] cannot detect last entry for blog {blog_id}!')
-        print(f'Info: {blog_id}\'s newest entry is {last_entry}.')
-    if last_entry == until:
-        print('No new update.')
-        return
-    results = parse_list(blog_id, last_entry, until=until)
+        data = load_init_data(soup)
+        blog_num_id = first(data['bloggerState']['bloggerMap'])['blog']
+    except Exception as ex:
+        print(f'[E] cannot get blog_num_id for {blog_id}.')
+        print(ex)
+
+    ids = []
+    offset = 0
+    while True:
+        url = f'https://ameblo.jp/_api/blogEntries;blogId={blog_num_id};limit={limit};offset={offset}'
+        print(f'Loading {url}...')
+        data = requests.get(url).json()
+        blogs = data['entities']['entryMap']
+        for entry_id, entry in blogs.items():
+            if until and str(entry_id) == str(until):
+                print(f'Reached last record {until}! Stop.')
+                return ids
+            ids.append(entry_id)
+        offset = first(data['entities']['blogPageMap'])['paging']['next']
+        total_count = first(data['entities']['blogPageMap'])['paging']['total_count']
+        if total_count == offset:
+            print('Reach end of the list. Stop.')
+            return ids
+
+
+def download_all(blog_id, save_folder='.', executor=None, until=None, download_type='image'):
+    results = parse_list(blog_id, until=until)
     if not results:
-        print('Get 0 entry. Exit.')
+        print('No new entry found.')
         return
-    print(f'Get {len(results)} entries. Start downloading..')
+    print(f'Get {len(results)} entries. Start downloading...')
     shutdown_executor_inside = False
     if not executor:
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
