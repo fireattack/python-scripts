@@ -10,6 +10,13 @@ import json
 import re
 from urllib.parse import unquote
 
+def flatten(x):
+    from collections.abc import Iterable
+    if isinstance(x, Iterable) and not isinstance(x, str):
+        return [a for i in x for a in flatten(i)]
+    else:
+        return [x]
+
 def copy(data):
     import win32clipboard
     win32clipboard.OpenClipboard()
@@ -65,14 +72,17 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
             return f
         if dupe == 'skip_same_size':
             if size:
-                existing_size = f.stat().st_size
-                if size == existing_size:
-                    print(f'[Warning] File {f.name} already exists and have same size! Skip.', 1)
-                    return None
-                else:
-                    f = ensure_nonexist(f)
-                    print(f'[Warning] File already exists, and the size doesn\'t match (exiting: {existing_size}; new: {size}). Rename.', 1)
-                    return f
+                i = 2 
+                stem = f.stem
+                while f.exists():
+                    existing_size = f.stat().st_size
+                    if size == existing_size:
+                        print(f'[Warning] File {f.name} already exists and have same size! Skip download.', 1)
+                        return None
+                    print(f'[Warning] File {f.name} already exists, and the size doesn\'t match (exiting: {existing_size}; new: {size}). Rename..', 1)
+                    f = f.with_name(f'{stem}_{i}{f.suffix}')
+                    i = i + 1                
+                return f
             else:
                 dupe = 'skip' # if we can't get size, just assume it's the same so we skip.
         if dupe == 'overwrite':
@@ -190,6 +200,8 @@ def remove_empty_folders(directory, remove_root=True): #Including root.
     if remove_root and not list(directory.iterdir()):
         directory.rmdir()
 
+
 if __name__ == "__main__":
     import sys
     download(*sys.argv[1:])
+
