@@ -137,7 +137,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                         if prefix:
                             header_name = f'{prefix} ' + header_name
                         f = p / safeify(header_name)
-                if f.suffix == '' and 'Content-Type' in r.headers: # Also find the file extension
+                if f.suffix in ['.php', ''] and 'Content-Type' in r.headers: # Also find the file extension
                     header_suffix = '.' + r.headers['Content-Type'].split('/')[-1].replace('jpeg','jpg')
                     f = f.with_suffix(header_suffix)
             expected_size = int(r.headers.get('Content-length', 0))
