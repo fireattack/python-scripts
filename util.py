@@ -24,6 +24,13 @@ def copy(data):
     win32clipboard.SetClipboardText(data, win32clipboard.CF_UNICODETEXT)
     win32clipboard.CloseClipboard()
 
+def get_clipboard_data():
+    import win32clipboard
+    win32clipboard.OpenClipboard()
+    data = win32clipboard.GetClipboardData(win32clipboard.CF_UNICODETEXT)
+    win32clipboard.CloseClipboard()
+    return data
+
 def dump_json(mydict, filename):
     filename = Path(filename)
     if filename.suffix.lower() !='.json':
