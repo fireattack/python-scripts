@@ -29,6 +29,13 @@ downloader = FantiaDownloader(fanclub=id, output=".", key=key)
 downloader.downloadAll()
 ```
 
+Or just download certain post (you can omit fanclub id in this case):
+
+```python
+downloader = FantiaDownloader(output=".", key='your _session_id')
+downloader.getPostPhotos(12345)
+```
+
 ## `util.py`
 
 Some utility functions mainly for myself. Read the code to get the idea. Some highlights:

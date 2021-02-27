@@ -12,10 +12,12 @@ HTML_POSTLIST = "https://fantia.jp/fanclubs/{}/posts?page={}"
 
 class FantiaDownloader:
 
-    def __init__(self, fanclub, output, key, skip_existing=True, quick_stop=True):
+    def __init__(self, key, fanclub=None, output='.', skip_existing=True, quick_stop=True):
         super().__init__()
         self.key = key
         self.fanclub = fanclub
+        if not self.fanclub:
+            print('[W] no fanclub id is given. "downloadAll()" won\'t work.')
         self.output = Path(output)
         self.skip_existing = skip_existing
         self.quick_stop = skip_existing and quick_stop
