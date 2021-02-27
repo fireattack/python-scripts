@@ -144,14 +144,11 @@ class RadikoExtractor():
                     e.submit(download, url, save_path=temp_folder)
 
             files = [f for f in temp_folder.iterdir() if f.suffix.lower() == '.aac']
-            my_str = ''
-            for f in files:
-                my_str += f"file '{f}'\n"
+            my_str = '\n'.join(f"file '{f}'" for f in files)
             filelist = temp_folder / 'files.txt'
+            filelist.write_text(my_str, encoding='utf-8')
+            
             temp_aac = temp_folder / 'temp.aac'
-            with filelist.open('w', encoding='utf-8') as f:
-                f.write(my_str)
-
             # Concat in raw aac first, then remuxed in m4a container. Otherwise the duration in SOME software would be wrong. Don't ask me why..
             run(['ffmpeg', '-f', 'concat', '-safe', '0', '-i', filelist, '-c', 'copy', temp_aac], stdout=DEVNULL)
             run(['ffmpeg', '-i', temp_aac, '-c', 'copy', fullpath], stdout=DEVNULL)
