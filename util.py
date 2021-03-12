@@ -207,6 +207,43 @@ def remove_empty_folders(directory, remove_root=True): #Including root.
     if remove_root and not list(directory.iterdir()):
         directory.rmdir()
 
+def sheet_api():
+    """Shows basic usage of the Sheets API.
+    Prints values from a sample spreadsheet.
+    """
+
+    import pickle
+    from googleapiclient.discovery import build
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from google.auth.transport.requests import Request
+
+    print('Initilize Google Sheets API..')
+    creds = None
+    # The file token.pickle stores the user's access and refresh tokens, and is
+    # created automatically when the authorization flow completes for the first
+    # time.
+    auth_folder = Path(__file__).parent / 'auth'
+    token_file = auth_folder / 'token.pickle'
+    if token_file.exists():
+        with token_file.open('rb') as token:
+            creds = pickle.load(token)
+    # If there are no (valid) credentials available, let the user log in.
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            credentials_file = auth_folder / 'credentials.json'
+            flow = InstalledAppFlow.from_client_secrets_file(str(credentials_file), ['https://www.googleapis.com/auth/spreadsheets'])
+            creds = flow.run_local_server(port=0)
+        # Save the credentials for the next run
+        with token_file.open('wb') as token:
+            pickle.dump(creds, token)
+
+    service = build('sheets', 'v4', credentials=creds)
+
+    # Call the Sheets API
+    return service.spreadsheets()
+
 
 if __name__ == "__main__":
     import sys
