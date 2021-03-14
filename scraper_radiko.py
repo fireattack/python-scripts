@@ -24,12 +24,15 @@ class RadikoExtractor():
         from datetime import datetime, timedelta
         from http.cookiejar import MozillaCookieJar
         import time
+        import pytz
+
+        tz = pytz.timezone('Asia/Tokyo')
 
         s = requests.Session()
 
         cookie_file = Path('cookies.txt') # for premium account
         if cookie_file.exists():
-            print("Find cookie file. Load...")
+            print(f"Found cookie file at {cookie_file}. Load...")
             cj = MozillaCookieJar(cookie_file)
             cj.load(ignore_expires=True,ignore_discard=True)
             for cookie in cj:
@@ -40,7 +43,9 @@ class RadikoExtractor():
         #http://www.joqr.co.jp/timefree/mss.php
         #http://radiko.jp/share/?sid=QRR&t=20200822260000
         #http://radiko.jp/#!/ts/QRR/20200823020000
+        is_joqr_timefree = False
         if re.search(r'joqr\.co\.jp/timefree/', self.url):
+            is_joqr_timefree = True
             r = requests.get(self.url)
             self.url = re.search(r'<META.+URL=(.+)">', r.text)[1]
 
@@ -69,7 +74,13 @@ class RadikoExtractor():
             date = (datetime.strptime(date, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')
             time = '{:02d}'.format(hr-24) + time[2:]
 
-        date_time = int(date + time)
+        date_time_obj = tz.localize(datetime.strptime(date + time, '%Y%m%d%H%M%S'))
+        now_obj = datetime.now().astimezone(tz)
+        if (now_obj - date_time_obj) > timedelta(days=7) and is_joqr_timefree:
+            print('[Warning] the link is more than 1 week old. Likely it\'s already expired. Automatically change to next week...')
+            date_time_obj = date_time_obj + timedelta(days=7)
+            natural_date = (datetime.strptime(natural_date, '%Y%m%d') + timedelta(days=7)).strftime('%Y%m%d')
+
         prog_list = s.get(f'http://radiko.jp/v3/program/station/date/{natural_date}/{station}.xml')
         prog_list.encoding = 'utf-8'
         root = ET.fromstring(prog_list.text)
@@ -77,7 +88,7 @@ class RadikoExtractor():
         title = ''
         for prog in root[2][0][1]:
             if prog.tag == 'prog':
-                if int(prog.attrib['ft']) <= date_time < int(prog.attrib['to']):
+                if int(prog.attrib['ft']) <= int(date_time_obj.strftime('%Y%m%d%H%M%S')) < int(prog.attrib['to']):
                     print('Find the program!', prog[0].text)
                     title = prog[0].text
                     ft = prog.attrib['ft']
@@ -116,13 +127,17 @@ class RadikoExtractor():
                 print('Geo-restricted. Please use a Japan IP.')
                 return
             print('[Auth info] Auth2 succeed.')
-            playlist = s.get(f'https://radiko.jp/v2/api/ts/playlist.m3u8?station_id={station}&&ft={ft}&to={to}', headers=headers2)
 
+            playlist_url = f'https://radiko.jp/v2/api/ts/playlist.m3u8?station_id={station}&&ft={ft}&to={to}'
+            playlist = s.get(playlist_url, headers=headers2)
             if m2 := re.search(r'http.+\.m3u8', playlist.text):
                 m3u8_url = m2[0]
                 with s.get(m3u8_url) as r:
                     urls = re.findall(r'https://media\.radiko\.jp/sound/b/.+?/.+?/.+\.aac', r.text)
                     print(f'Find {len(urls)} segments!')
+            else:
+                print(f'Cannot get playlist from {playlist_url}! Response: {playlist.text}')
+                return
 
             save_folder = Path(self.save_dir)
             filename = f'{ft[2:8]} {ft[8:]} {title} [{station}].m4a'
@@ -147,7 +162,7 @@ class RadikoExtractor():
             my_str = '\n'.join(f"file '{f}'" for f in files)
             filelist = temp_folder / 'files.txt'
             filelist.write_text(my_str, encoding='utf-8')
-            
+
             temp_aac = temp_folder / 'temp.aac'
             # Concat in raw aac first, then remuxed in m4a container. Otherwise the duration in SOME software would be wrong. Don't ask me why..
             run(['ffmpeg', '-f', 'concat', '-safe', '0', '-i', filelist, '-c', 'copy', temp_aac], stdout=DEVNULL)
