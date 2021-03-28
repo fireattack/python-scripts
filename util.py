@@ -245,6 +245,26 @@ def sheet_api():
     return service.spreadsheets()
 
 
+def format_str(s, width=None, align='left'):
+    import wcwidth
+
+    s = str(s)
+    if not width:
+        return s
+    output = ''
+    length = 0
+    for char in s:
+        size = wcwidth.wcswidth(char)
+        if length + size > width:
+            break
+        output += char
+        length += size
+    if align == 'left':
+        return output + ' '*(width-length)
+    if align == 'right':
+        return ' '*(width-length) + output
+
+
 if __name__ == "__main__":
     import sys
     download(*sys.argv[1:])
