@@ -247,8 +247,10 @@ def sheet_api():
 
 def format_str(s, width=None, align='left'):
     import wcwidth
-
-    s = str(s)
+    if s is None:
+        s = ''
+    else:
+        s = str(s)
     if not width:
         return s
     output = ''
