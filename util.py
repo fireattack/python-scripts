@@ -66,7 +66,9 @@ def ensure_nonexist(f):
         i = i + 1
     return f
 
-def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dupe='skip_same_size', referer=None, placeholder=True, prefix='', verbose=2):
+
+def download(url, filename=None, save_path='.', cookies=None, dry_run=False,
+             dupe='skip_same_size', referer=None, placeholder=True, prefix='', get_suffix=False, verbose=2):
     if dupe not in ['skip', 'overwrite', 'rename', 'skip_same_size']:
         raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite or rename).')
 
@@ -144,9 +146,13 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False, dup
                         if prefix:
                             header_name = f'{prefix} ' + header_name
                         f = p / safeify(header_name)
-                if f.suffix in ['.php', ''] and 'Content-Type' in r.headers: # Also find the file extension
-                    header_suffix = '.' + r.headers['Content-Type'].split('/')[-1].replace('jpeg','jpg')
+            if (get_suffix or f.suffix.lower() in ['.php', '']) and 'Content-Type' in r.headers: # Also find the file extension
+                header_suffix = '.' + r.headers['Content-Type'].split('/')[-1].replace('jpeg','jpg')
+                if f.suffix.lower() in ['.php', '']:
                     f = f.with_suffix(header_suffix)
+                else: # this is to prevent the filename has dot in it, which causes Path to think part of stem is suffix.
+                    f = f.with_name(f.name + header_suffix)
+
             expected_size = int(r.headers.get('Content-length', 0))
             if dupe == 'skip_same_size':
                 if expected_size == 0:
