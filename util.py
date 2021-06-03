@@ -10,6 +10,18 @@ import json
 import re
 from urllib.parse import unquote
 
+
+def load_cookie(filename):
+    from http.cookiejar import MozillaCookieJar
+    cj = MozillaCookieJar(filename)
+    cj.load(ignore_expires=True,ignore_discard=True)
+    for cookie in cj:
+        if cookie.expires == 0:
+            cookie.expires = int(time.time()+ 86400)
+
+    return cj
+
+
 def flatten(x):
     from collections.abc import Iterable
     if isinstance(x, Iterable) and not isinstance(x, str):
@@ -52,8 +64,10 @@ def safeify(name):
     return name
 
 
-def get(url, headers=None, cookies=None, encoding='utf-8'):
-    r = requests.get(url, cookies=cookies, headers=headers)
+def get(url, headers=None, cookies=None, encoding='utf-8', session=None):
+    if not session:
+        session = requests.Session()    
+    r = session.get(url, cookies=cookies, headers=headers)
     r.encoding = encoding
     return BeautifulSoup(r.text, 'lxml')
 
@@ -67,10 +81,13 @@ def ensure_nonexist(f):
     return f
 
 
-def download(url, filename=None, save_path='.', cookies=None, dry_run=False,
+def download(url, filename=None, save_path='.', cookies=None, session=None, dry_run=False,
              dupe='skip_same_size', referer=None, placeholder=True, prefix='', get_suffix=False, verbose=2):
     if dupe not in ['skip', 'overwrite', 'rename', 'skip_same_size']:
         raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite or rename).')
+
+    if not session:
+        session = requests.Session()
 
     def print(s, verbose_level, only=False):
         if (only and verbose == verbose_level) or (not only and verbose >= verbose_level):
@@ -111,6 +128,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False,
 
     if filename: # If filename is supplied
         f = Path(filename)
+        f = f.with_name(safeify(f.name))
     else: # If not, create a f using save_path + web_name for now.
         p = Path(save_path)
         web_name = unquote(url.split('?')[0].split('/')[-1])
@@ -126,7 +144,7 @@ def download(url, filename=None, save_path='.', cookies=None, dry_run=False,
 
     f.parent.mkdir(parents=True, exist_ok=True)
 
-    with requests.get(url, headers={"referer": referer}, cookies=cookies, stream=True) as r:
+    with session.get(url, headers={"referer": referer}, cookies=cookies, stream=True) as r:
         if r.status_code == 200:
             if not filename: # Try to find filename using the response again, is not specified
                 if r.url != url: # Get filename again from URL for potential 302/301
@@ -277,3 +295,72 @@ if __name__ == "__main__":
     import sys
     download(*sys.argv[1:])
 
+class Table():
+    def __init__(self, rows=None, headers=None, max_width=20) -> None:
+        if rows and not headers:
+            self.headers = rows[0]
+            self.data = rows[1:]
+        elif headers:
+            self.headers = headers
+            self.data = []
+        else:
+            raise Exception('No header or data given!')
+        self.max_width = max_width
+
+    def search(self, keywords, single=True):
+        matched_rows = []
+        for row in self.data:
+            matched = True
+            for key, value in keywords.items():
+                assert key in self.headers
+                col_idx = self.headers.index(key)
+                if not value: # Ignore empty values
+                    continue
+                if not ((str(row[col_idx]) == str(value)) or (row[col_idx] == value)):
+                    matched = False
+                    break
+            if matched:
+                matched_rows.append(row)
+                if single:
+                    break
+        if matched_rows:
+            if single and len(matched_rows) == 1:
+                return matched_rows[0]
+            else:
+                return matched_rows
+        else:
+            return []
+    def append(self, new_data):
+        d = [None] * len(self.headers)
+        for key, value in new_data.items():
+            assert key in self.headers
+            col_idx = self.headers.index(key)
+            d[col_idx] = value
+        self.data.append(d)
+    def print(self):
+        import wcwidth
+        def print_row(row, widths):
+            print(''.join(format_str(row[idx], widths[idx]) + ' ' for idx in range(len(row))))
+        def max_width(idx):
+            maxw = 0
+            for c in str(self.headers[idx]):
+                maxw += wcwidth.wcwidth(c)
+                
+            for row in self.data:
+                w = 0
+                if idx > len(row) - 1:
+                    continue
+                for c in str(row[idx]):
+                    w += wcwidth.wcwidth(c)
+                if w > maxw:
+                    maxw = w
+            maxw = min(maxw, self.max_width)
+            return maxw
+
+        widths = dict()
+        for idx in range(len(self.headers)):
+            widths[idx] = max_width(idx)
+
+        print_row(self.headers, widths)
+        for row in self.data:
+            print_row(row, widths)
