@@ -75,6 +75,9 @@ def get(url, headers=None, cookies=None, encoding='utf-8', session=None):
 def ensure_nonexist(f):
     i = 2
     stem = f.stem
+    if m:= re.search(r'^(.+?)_(\d+)$', stem):
+        stem = m[1]
+        i = int(m[2]) + 1
     while f.exists():
         f = f.with_name(f'{stem}_{i}{f.suffix}')
         i = i + 1
@@ -98,8 +101,14 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
             return f
         if dupe == 'skip_same_size':
             if size:
+                # this part is basically `ensure_nonexist()` but the logic is slightly different:
+                # (if the filename exists and the filesize is the same, stop; otherwise find the next unoccupied filename.)
+                # Therefore, we have to repeat it here.
                 i = 2 
                 stem = f.stem
+                if m:= re.search(r'^(.+?)_(\d+)$', stem):
+                    stem = m[1]
+                    i = int(m[2]) + 1         
                 while f.exists():
                     existing_size = f.stat().st_size
                     if size == existing_size:
@@ -107,7 +116,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                         return None
                     print(f'[Warning] File {f.name} already exists, and the size doesn\'t match (exiting: {existing_size}; new: {size}). Rename..', 1)
                     f = f.with_name(f'{stem}_{i}{f.suffix}')
-                    i = i + 1                
+                    i = i + 1           
                 return f
             else:
                 dupe = 'skip' # if we can't get size, just assume it's the same so we skip.
