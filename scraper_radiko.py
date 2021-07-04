@@ -159,20 +159,26 @@ class RadikoExtractor():
                     e.submit(download, url, save_path=temp_folder)
 
             files = [f for f in temp_folder.iterdir() if f.suffix.lower() == '.aac']
-            my_str = '\n'.join(f"file '{f}'" for f in files)
+            # Since FFMPEG 4.4, "the file names / paths given in the concat file are relative to the position of the concat file"
+            # See: https://trac.ffmpeg.org/ticket/9277
+            # So lets just use abs. path.
+            my_str = '\n'.join(f"file '{f.resolve()}'" for f in files) 
             filelist = temp_folder / 'files.txt'
             filelist.write_text(my_str, encoding='utf-8')
 
             temp_aac = temp_folder / 'temp.aac'
             # Concat in raw aac first, then remuxed in m4a container. Otherwise the duration in SOME software would be wrong. Don't ask me why..
             run(['ffmpeg', '-f', 'concat', '-safe', '0', '-i', filelist, '-c', 'copy', temp_aac], stdout=DEVNULL)
+            if not temp_aac.exists():
+                print('[Error] acc concat failed. Please check manually!')
+                return
             run(['ffmpeg', '-i', temp_aac, '-c', 'copy', fullpath], stdout=DEVNULL)
             # Remove temp files
             for f in files:
                 f.unlink()
             filelist.unlink()
             temp_aac.unlink()
-            temp_folder.rmdir()
+            temp_folder.rmdir() 
         else:
             print(f'[Auth info] Auth2 failed (HTTP {auth2.status_code}).')
             return
