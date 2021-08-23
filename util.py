@@ -85,12 +85,14 @@ def ensure_nonexist(f):
 
 
 def download(url, filename=None, save_path='.', cookies=None, session=None, dry_run=False,
-             dupe='skip_same_size', referer=None, placeholder=True, prefix='', get_suffix=False, verbose=2):
+             dupe='skip_same_size', referer=None, headers=None, placeholder=True, prefix='', get_suffix=False, verbose=2):
     if dupe not in ['skip', 'overwrite', 'rename', 'skip_same_size']:
-        raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite or rename).')
+        raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite, rename or skip_same_size).')
 
     if not session:
         session = requests.Session()
+    if headers:
+        session.headers.update(headers)
 
     def print(s, verbose_level, only=False):
         if (only and verbose == verbose_level) or (not only and verbose >= verbose_level):
@@ -155,7 +157,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
 
     with session.get(url, headers={"referer": referer}, cookies=cookies, stream=True) as r:
         if r.status_code == 200:
-            if not filename: # Try to find filename using the response again, is not specified
+            if not filename: # Try to find filename using the response again, if not specified
                 if r.url != url: # Get filename again from URL for potential 302/301
                     web_name = unquote(r.url.split('?')[0].split('/')[-1])
                     if prefix:
@@ -220,15 +222,16 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
 def hello(a, b):
     print(f'hello: {a} and {b}')
 
-def get_files(directory, recursive=False):
+def get_files(directory, recursive=False, file_filter=None):
     dirpath = Path(directory)
     assert(dirpath.is_dir())
     file_list = []
     for x in dirpath.iterdir():
         if x.is_file():
-            file_list.append(x)
+            if not file_filter or file_filter(x):
+                file_list.append(x)
         elif x.is_dir() and recursive:
-            file_list.extend(get_files(x, recursive=True))
+            file_list.extend(get_files(x, recursive=recursive, file_filter=file_filter))
     return file_list
 
 def remove_empty_folders(directory, remove_root=True): #Including root.
@@ -315,6 +318,12 @@ class Table():
         else:
             raise Exception('No header or data given!')
         self.max_width = max_width
+    def rows(self):
+        for row in self.data:
+            row_dict = {}
+            for i, header in enumerate(self.headers):
+                row_dict[header] = row[i]
+            yield row_dict
 
     def search(self, keywords, single=True):
         matched_rows = []
@@ -373,3 +382,12 @@ class Table():
         print_row(self.headers, widths)
         for row in self.data:
             print_row(row, widths)
+
+    def save(self, f):
+        s = ''
+        f = Path(f)
+        s += '\t'.join(self.headers) + '\n'
+        for row in self.data:
+            s += '\t'.join([str(cell) for cell in row]) + '\n'
+        f.write_text(s, encoding='utf8')
+    
