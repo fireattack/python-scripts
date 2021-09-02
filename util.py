@@ -176,7 +176,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                             header_name = f'{prefix} ' + header_name
                         f = p / safeify(header_name)
             if (get_suffix or f.suffix.lower() in ['.php', '']) and 'Content-Type' in r.headers: # Also find the file extension
-                header_suffix = '.' + r.headers['Content-Type'].split('/')[-1].replace('jpeg','jpg')
+                header_suffix = '.' + r.headers['Content-Type'].split(';')[0].split('/')[-1].replace('jpeg', 'jpg')
                 if f.suffix.lower() in ['.php', '']:
                     f = f.with_suffix(header_suffix)
                 else: # this is to prevent the filename has dot in it, which causes Path to think part of stem is suffix.
@@ -222,7 +222,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
 def hello(a, b):
     print(f'hello: {a} and {b}')
 
-def get_files(directory, recursive=False, file_filter=None):
+def get_files(directory, recursive=False, file_filter=None, path_filter=None):
     dirpath = Path(directory)
     assert(dirpath.is_dir())
     file_list = []
@@ -230,8 +230,8 @@ def get_files(directory, recursive=False, file_filter=None):
         if x.is_file():
             if not file_filter or file_filter(x):
                 file_list.append(x)
-        elif x.is_dir() and recursive:
-            file_list.extend(get_files(x, recursive=recursive, file_filter=file_filter))
+        elif x.is_dir() and recursive and (not path_filter or path_filter(x)):
+            file_list.extend(get_files(x, recursive=recursive, file_filter=file_filter, path_filter=path_filter))
     return file_list
 
 def remove_empty_folders(directory, remove_root=True): #Including root.
