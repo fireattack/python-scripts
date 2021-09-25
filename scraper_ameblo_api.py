@@ -22,15 +22,16 @@ def download_image(blog_id, id, save_folder='.'):
     data = requests.get(f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{id}/images').json()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-        for idx, img in enumerate(data['data']):
+        for idx, img in enumerate(data['data'], 1):
             img_url = urljoin('https://stat.ameba.jp/', img['imgUrl'])
             img_url = re.sub(r'^(.+)\?(.+)$', r'\1', img_url)  # Remove parameters
             img_url = re.sub(r'\/t[0-9]*_([^/]*)$', r'/o\1', img_url)
             date = re.search(r'user_images/(\d+)/', img_url)[1]
+            date = date[2:] # remove 20
             file_name = img_url.split('/')[-1]
             desc = img['title']
-            img_name = safeify(f'{date} {id}_{desc}_{idx+1} {file_name}') if len(
-                data['data']) > 1 else safeify(f'{date} {id}_{desc} {file_name}')
+            desc_ = f'{desc}_{idx}' if len(data['data']) > 1 else desc
+            img_name = safeify(f'{date} ameblo_{blog_id}_{id} {desc_} {file_name}')
             ex.submit(download, img_url, Path(save_folder) / img_name, dupe='skip', verbose=1)
 
 def download_text(blog_id, id, save_folder='.'):
@@ -44,18 +45,21 @@ def download_text(blog_id, id, save_folder='.'):
         title = b['entry_title']
         text = b['entry_text']
         time = b['entry_created_datetime']
-        date = parser.parse(time).strftime('%Y%m%d_%H%M%S')
+        date = parser.parse(time).strftime('%y%m%d_%H%M%S') # keep HMS as well for text
+        
         #Dump
         text_folder = Path(save_folder) / 'text'
         text_folder.mkdir(exist_ok=True)
-        html = text_folder / safeify(f'{date} {id}_{title}.html')
+        stem = f'{date} ameblo_{blog_id}_{id} {title}'
+
+        html = text_folder / safeify(f'{stem}.html')
         if html.exists():
             print(f'{html.name} Already exists! Ignore.')
             return
         html.write_text(text, encoding='utf8')
         metadata_folder = Path(save_folder) / 'metadata'
         metadata_folder.mkdir(exist_ok=True)
-        metadata = metadata_folder / safeify(f'{date} {id}_{title}.json')
+        metadata = metadata_folder / safeify(f'{stem}.json')
         dump_json(b, metadata)
     else:
         print(f'[E] cannot fetch data from {url}!')
