@@ -116,7 +116,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                     if size == existing_size:
                         print(f'[Warning] File {f.name} already exists and have same size! Skip download.', 1)
                         return None
-                    print(f'[Warning] File {f.name} already exists, and the size doesn\'t match (exiting: {existing_size}; new: {size}). Rename..', 1)
+                    print(f'[Warning] File {f.name} already exists, and the size doesn\'t match (existing: {existing_size}; new: {size}). Rename..', 1)
                     f = f.with_name(f'{stem}_{i}{f.suffix}')
                     i = i + 1           
                 return f
