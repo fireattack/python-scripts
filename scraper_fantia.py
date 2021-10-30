@@ -69,7 +69,7 @@ class FantiaDownloader:
         r = self.fetch(url)
         r.encoding = 'utf-8'
         html = r.text
-        return re.findall(r'\/posts\/(?P<id>[0-9]{1,8})', html)
+        return re.findall(r'\/posts\/(?P<id>[0-9]{1,8})"', html)
 
     def getPostPhotos(self, id):
         def getWebName(url):

@@ -69,7 +69,7 @@ def get(url, headers=None, cookies=None, encoding='utf-8', session=None):
         session = requests.Session()    
     r = session.get(url, cookies=cookies, headers=headers)
     r.encoding = encoding
-    return BeautifulSoup(r.text, 'lxml')
+    return BeautifulSoup(r.text, 'html.parser')
 
 
 def ensure_nonexist(f):
@@ -135,7 +135,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
 
     if dry_run:
         print(f'[Info only] URL: {url}', 1)
-        return
+        return 'Dry run'
 
     if filename: # If filename is supplied
         f = Path(filename)
@@ -151,7 +151,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
     # Also don't check if filename is likely change by response header.
     if dupe in ['skip', 'rename'] and f.suffix.lower() not in ['.php', '']:
         if not (f := check_dupe(f)):
-            return
+            return 'Exists'
 
     f.parent.mkdir(parents=True, exist_ok=True)
 
@@ -193,7 +193,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
             # Check it again before download starts.
             # Note: if dupe=overwrite, it will check (and print) twice, before and after downloading. This is by design.
             if not (f := check_dupe(f, size=expected_size)):
-                return
+                return 'Exists'
             print(f'Downloading {f.name} from {url}...', 2)
             print(f'Downloading {f.name}...', 1, only=True)
             temp_file = f.with_name(f.name + '.dl')
@@ -206,7 +206,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
             f = check_dupe(f, size=downloaded_size) # Check again. Because some other programs may create the file during downloading
             if not f: # this means skip. Remove what we just downloaded.
                 temp_file.unlink()
-                return
+                return 'Exists'
             if f.exists(): # this means overwrite. So remove before rename.
                 f.unlink()
             # In other case, either f has been renamed or no conflict. So just rename.
@@ -301,6 +301,26 @@ def format_str(s, width=None, align='left'):
         return output + ' '*(width-length)
     if align == 'right':
         return ' '*(width-length) + output
+
+
+def array_to_range_text(a, sep=', ', dash='-'):
+    s = ''
+    prev_seg = None
+    for idx, seg in enumerate(a):
+        if idx == 0: # first segment
+            s += f'{seg}'
+            range_start = seg
+        else:
+            if seg - prev_seg == 1:
+                if idx == len(a) - 1: # last segment
+                    s += f'{dash}{seg}'
+            else:
+                if prev_seg > range_start:
+                    s += f'{dash}{prev_seg}'
+                s += f'{sep}{seg}'
+                range_start = seg
+        prev_seg = seg
+    return s
 
 
 if __name__ == "__main__":
