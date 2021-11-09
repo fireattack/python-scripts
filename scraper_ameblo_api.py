@@ -99,6 +99,9 @@ def parse_list(blog_id, limit=10, until=None):
         data = requests.get(url).json()
         blogs = data['entities']['entryMap']
         for entry_id, entry in blogs.items():
+            if entry['publish_flg'] == 'amember':
+                print(f'[W] cannot get post {entry_id} since it\'s amember only.')
+                continue
             if until and str(entry_id) == str(until):
                 print(f'Reached last record {until}! Stop.')
                 return ids
