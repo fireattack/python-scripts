@@ -1,5 +1,4 @@
 import builtins
-import lxml
 import requests
 from bs4 import BeautifulSoup
 import time
@@ -9,6 +8,36 @@ from pathlib import Path
 import json
 import re
 from urllib.parse import unquote
+
+
+def get_webname(url):
+    return unquote(url.split('?')[0].split('/')[-1])
+
+
+def to_list(a):
+    return a if not a or isinstance(a, list) else [a]
+
+
+def parse_to_shortdate(date_str):
+    from dateutil import parser
+
+    date_str = date_str.replace('\s+',' ').strip()
+    res = [r'(\d+)年 *(\d+)月 *(\d+)日', r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})']
+    for r in res:
+        m = re.search(r, date_str)
+        if m:
+            date_str = m[1] + m[2].zfill(2) + m[3].zfill(2)
+            break
+        # Sometimes the string has extra spaces. But this is dangerous since things like `2014/3/7 23:52` will be parsed as `20140372`.
+        # But it *should* have been caught by the `m` above already, so 99% of the cases it should be fine.
+        m2 = re.search(r, date_str.replace(' ', ''))
+        if m2:
+            date_str = m2[1] + m2[2].zfill(2) + m2[3].zfill(2)
+            break
+    try:
+        return parser.parse(date_str, yearfirst=True).strftime('%y%m%d')
+    except:
+        return ""
 
 
 def load_cookie(filename):
@@ -66,7 +95,7 @@ def safeify(name):
 
 def get(url, headers=None, cookies=None, encoding='utf-8', session=None):
     if not session:
-        session = requests.Session()    
+        session = requests.Session()
     r = session.get(url, cookies=cookies, headers=headers)
     r.encoding = encoding
     return BeautifulSoup(r.text, 'html.parser')
@@ -106,11 +135,11 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                 # this part is basically `ensure_nonexist()` but the logic is slightly different:
                 # (if the filename exists and the filesize is the same, stop; otherwise find the next unoccupied filename.)
                 # Therefore, we have to repeat it here.
-                i = 2 
+                i = 2
                 stem = f.stem
                 if m:= re.search(r'^(.+?)_(\d+)$', stem):
                     stem = m[1]
-                    i = int(m[2]) + 1         
+                    i = int(m[2]) + 1
                 while f.exists():
                     existing_size = f.stat().st_size
                     if size == existing_size:
@@ -118,7 +147,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                         return None
                     print(f'[Warning] File {f.name} already exists, and the size doesn\'t match (existing: {existing_size}; new: {size}). Rename..', 1)
                     f = f.with_name(f'{stem}_{i}{f.suffix}')
-                    i = i + 1           
+                    i = i + 1
                 return f
             else:
                 dupe = 'skip' # if we can't get size, just assume it's the same so we skip.
@@ -142,7 +171,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
         f = f.with_name(safeify(f.name))
     else: # If not, create a f using save_path + web_name for now.
         p = Path(save_path)
-        web_name = unquote(url.split('?')[0].split('/')[-1])
+        web_name = get_webname(url)
         if prefix:
             web_name = f'{prefix} ' + web_name
         f = p / safeify(web_name)
@@ -159,7 +188,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
         if r.status_code == 200:
             if not filename: # Try to find filename using the response again, if not specified
                 if r.url != url: # Get filename again from URL for potential 302/301
-                    web_name = unquote(r.url.split('?')[0].split('/')[-1])
+                    web_name = get_webname(r.url)
                     if prefix:
                         web_name = f'{prefix} ' + web_name
                     f = p / safeify(web_name)
@@ -383,7 +412,7 @@ class Table():
             maxw = 0
             for c in str(self.headers[idx]):
                 maxw += wcwidth.wcwidth(c)
-                
+
             for row in self.data:
                 w = 0
                 if idx > len(row) - 1:
@@ -410,4 +439,3 @@ class Table():
         for row in self.data:
             s += '\t'.join([str(cell) for cell in row]) + '\n'
         f.write_text(s, encoding='utf8')
-    
