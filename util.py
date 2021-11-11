@@ -174,6 +174,9 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
         web_name = get_webname(url)
         if prefix:
             web_name = f'{prefix} ' + web_name
+        # a special case is when web_name is empty, which causes f to be just the save_path. We just don't check in this case.
+        if not web_name:
+            web_name = 'no_web_name'
         f = p / safeify(web_name)
 
     # Check if file exists for dupe=skip and rename. Other dupe methods will check later.
