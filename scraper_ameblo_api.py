@@ -46,7 +46,7 @@ def download_text(blog_id, id, save_folder='.'):
         text = b['entry_text']
         time = b['entry_created_datetime']
         date = parser.parse(time).strftime('%y%m%d_%H%M%S') # keep HMS as well for text
-        
+
         #Dump
         text_folder = Path(save_folder) / 'text'
         text_folder.mkdir(exist_ok=True)
@@ -113,15 +113,15 @@ def parse_list(blog_id, limit=10, until=None):
             return ids
 
 
-def download_all(blog_id, save_folder='.', executor=None, until=None, download_type='image'):
-    results = parse_list(blog_id, until=until)
+def download_all(blog_id, save_folder='.', executor=None, until=None, limit=10, download_type='image'):
+    results = parse_list(blog_id, until=until, limit=limit)
     if not results:
         print('No new entry found.')
         return
     print(f'Get {len(results)} entries. Start downloading...')
     shutdown_executor_inside = False
     if not executor:
-        executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
         shutdown_executor_inside = True
     for id in results:
         if download_type in ['all', 'image']:
