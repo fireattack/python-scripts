@@ -93,12 +93,12 @@ def safeify(name):
     return name
 
 
-def get(url, headers=None, cookies=None, encoding='utf-8', session=None):
+def get(url, headers=None, cookies=None, encoding='utf-8', session=None, parser='html.parser'):
     if not session:
         session = requests.Session()
     r = session.get(url, cookies=cookies, headers=headers)
     r.encoding = encoding
-    return BeautifulSoup(r.text, 'html.parser')
+    return BeautifulSoup(r.text, parser)
 
 
 def ensure_nonexist(f):
