@@ -93,11 +93,13 @@ def safeify(name):
     return name
 
 
-def get(url, headers=None, cookies=None, encoding='utf-8', session=None, parser='html.parser'):
+def get(url, headers=None, cookies=None, encoding=None, session=None, parser='html.parser'):
     if not session:
         session = requests.Session()
     r = session.get(url, cookies=cookies, headers=headers)
-    r.encoding = encoding
+    # requests typically can detect correct encoding. Only override if is specified.
+    if encoding:
+        r.encoding = encoding 
     return BeautifulSoup(r.text, parser)
 
 

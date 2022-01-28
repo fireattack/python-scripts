@@ -23,7 +23,10 @@ class FantiaDownloader:
         self.quick_stop = skip_existing and quick_stop
 
     def fetch(self, url):
-        return requests.get(url, cookies={"_session_id": self.key})
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36',
+        }
+        return requests.get(url, headers=headers, cookies={"_session_id": self.key})
 
     def downloadAll(self):
         print(f'Fanclub {self.fanclub}: download all to {self.output}.')
