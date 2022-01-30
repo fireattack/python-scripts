@@ -99,7 +99,11 @@ def get(url, headers=None, cookies=None, encoding=None, session=None, parser='ht
     r = session.get(url, cookies=cookies, headers=headers)
     # requests typically can detect correct encoding. Only override if is specified.
     if encoding:
-        r.encoding = encoding 
+        r.encoding = encoding
+    else:
+        # If the encoding is not specified (default value 'ISO-8859-1'), try to detect it.
+        if r.encoding == 'ISO-8859-1' and r.apparent_encoding != 'ISO-8859-1':
+            r.encoding = r.apparent_encoding
     return BeautifulSoup(r.text, parser)
 
 
