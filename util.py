@@ -93,7 +93,7 @@ def safeify(name):
     return name
 
 
-def get(url, headers=None, cookies=None, encoding=None, session=None, parser='html.parser'):
+def get(url, headers=None, cookies=None, encoding='utf-8', session=None, parser='html.parser'):
     if not session:
         session = requests.Session()
     r = session.get(url, cookies=cookies, headers=headers)
@@ -102,6 +102,7 @@ def get(url, headers=None, cookies=None, encoding=None, session=None, parser='ht
         r.encoding = encoding
     else:
         # If the encoding is not specified (default value 'ISO-8859-1'), try to detect it.
+        # Note: getting `r.apparent_encoding` is very slow. So only do so if encoding is deliberately specified as None.
         if r.encoding == 'ISO-8859-1' and r.apparent_encoding != 'ISO-8859-1':
             r.encoding = r.apparent_encoding
     return BeautifulSoup(r.text, parser)
