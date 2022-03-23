@@ -29,12 +29,16 @@ class FantiaDownloader:
         return requests.get(url, headers=headers, cookies={"_session_id": self.key})
 
     def downloadAll(self):
+        if not self.fanclub:
+            print('No fanclub id is given. "downloadAll()" won\'t work.')
+            return
         print(f'Fanclub {self.fanclub}: download all to {self.output}.')
-        if not self.output.exists():
-            self.output.exists.mkdir(parents=True, exist_ok=True)
-        existing_ids = [m[1] for f in self.output.iterdir() if (m := re.match(r'(\d+) *', f.name))]
-        existing_ids = list(dict.fromkeys(existing_ids))
-        print(f'{len(existing_ids)} IDs have already been downloaded.')
+        if self.output.exists():
+            existing_ids = [m[1] for f in self.output.iterdir() if (m := re.match(r'(\d+) *', f.name))]
+            existing_ids = list(dict.fromkeys(existing_ids))
+        else:
+            existing_ids = []
+        print(f'{len(existing_ids)} ID(s) have already been downloaded.')
 
         def fetchAll():
             results = []; page = 1
@@ -53,7 +57,7 @@ class FantiaDownloader:
                     return results
         results = fetchAll()
         results = list(dict.fromkeys(results))
-        print(f"Get {len(results)} IDs from list.")
+        print(f"Get {len(results)} ID(s) from list.")
 
         skipped = []; to_be_dl = []
         for id in results:
@@ -62,10 +66,13 @@ class FantiaDownloader:
             else:
                 to_be_dl.append(id)
         if skipped:
-            print(f"Skip {len(skipped)} existing IDs.")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-            for id in to_be_dl:
-                ex.submit(self.getPostPhotos, id)
+            print(f"Skip {len(skipped)} existing ID(s).")
+        if to_be_dl:
+            # Only create the output directory if we're actually going to download something
+            self.output.mkdir(parents=True, exist_ok=True)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
+                for id in to_be_dl:
+                    ex.submit(self.getPostPhotos, id)
 
     def fetchGalleryPage(self, page):
         url = HTML_POSTLIST.format(self.fanclub, page)
