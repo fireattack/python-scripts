@@ -121,7 +121,7 @@ def ensure_nonexist(f):
 
 
 def download(url, filename=None, save_path='.', cookies=None, session=None, dry_run=False,
-             dupe='skip_same_size', referer=None, headers=None, placeholder=True, prefix='', get_suffix=False, verbose=2):
+             dupe='skip_same_size', referer=None, headers=None, placeholder=True, prefix='', get_suffix=True, verbose=2):
     if dupe not in ['skip', 'overwrite', 'rename', 'skip_same_size']:
         raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite, rename or skip_same_size).')
 
@@ -133,6 +133,17 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
     def print(s, verbose_level, only=False):
         if (only and verbose == verbose_level) or (not only and verbose >= verbose_level):
             builtins.print(s)
+
+    def has_valid_suffix(f):
+        # common suffixes
+        if f.suffix.lower() in ['.jpg', '.png', '.gif', '.webp', '.jpeg', '.bmp', '.svg', '.ico', '.mp4', '.mkv', '.webm', '.heic']:
+            return True
+        if f.suffix.lower() in ['.php', '']:
+            return False
+        # if the suffix is too long, has a space, etc., we assume it is not a valid suffix
+        if len(f.suffix.lower()) > 5 or ' ' in f.suffix.lower():
+            return False
+        return True
 
     def check_dupe(f, dupe=dupe, size=0):
         if not f.exists():
@@ -188,7 +199,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
 
     # Check if file exists for dupe=skip and rename. Other dupe methods will check later.
     # Also don't check if filename is likely change by response header.
-    if dupe in ['skip', 'rename'] and f.suffix.lower() not in ['.php', '']:
+    if dupe in ['skip', 'rename'] and not has_valid_suffix(f):
         if not (f := check_dupe(f)):
             return 'Exists'
 
@@ -214,17 +225,18 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                         if prefix:
                             header_name = f'{prefix} ' + header_name
                         f = p / safeify(header_name)
-            if (get_suffix or f.suffix.lower() in ['.php', '']) and 'Content-Type' in r.headers: # Also find the file extension
+            if (get_suffix or not has_valid_suffix(f)) and 'Content-Type' in r.headers: # Also find the file extension
                 header_suffix = '.' + r.headers['Content-Type'].split(';')[0].split('/')[-1].lower().replace('jpeg', 'jpg')
                 if f.suffix.lower() in ['.php', '']:
                     f = f.with_suffix(header_suffix)
                 # this is to prevent the filename has dot in it, which causes Path to think part of stem is suffix.
                 # so we only replace the suffix that is <= 3 chars.
                 # Not ideal, but should be good enough.
-                elif len(f.suffix.lower()) <= 4:
-                    if f.suffix.lower() != header_suffix[1:]:
+                elif has_valid_suffix(f):
+                    if f.suffix.lower() != header_suffix:
                         print(f'[Warning] File suffix is different from the one in Content-Type header! {f.suffix.lower()} -> {header_suffix}', 1)
-                    f = f.with_suffix(header_suffix)
+                        f = f.with_suffix(header_suffix)
+                # f has a weird suffix. We assume it's part of the name, so we just append the suffix.
                 else:
                     f = f.with_name(f.name + header_suffix)
 
