@@ -9,6 +9,9 @@ from natsort import natsorted
 API_POSTS = "https://fantia.jp/api/v1/posts/{}"
 API_FANCLUB = "https://fantia.jp/api/v1/fanclubs/{}" # Not used for now
 HTML_POSTLIST = "https://fantia.jp/fanclubs/{}/posts?page={}"
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36',
+}
 
 class FantiaDownloader:
 
@@ -23,10 +26,7 @@ class FantiaDownloader:
         self.quick_stop = skip_existing and quick_stop
 
     def fetch(self, url):
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36',
-        }
-        return requests.get(url, headers=headers, cookies={"_session_id": self.key})
+        return requests.get(url, headers=HEADERS, cookies={"_session_id": self.key})
 
     def downloadAll(self):
         if not self.fanclub:
@@ -46,7 +46,8 @@ class FantiaDownloader:
                 print(f"Attempting to fetch page {page}...")
                 out = self.fetchGalleryPage(page)
                 if out:
-                    out = natsorted(out, reverse=True)
+                    # do NOT sort; since the order is not id_desc
+                    # out = natsorted(out, reverse=True)
                     for id in out:
                         if self.quick_stop and id in existing_ids:
                             print(f'Encountered existing id {id}. Quick stop.')
@@ -108,7 +109,7 @@ class FantiaDownloader:
                             ex.submit(download, img_url, filename=self.output / f'{stem}.{ext}', verbose=1)
                     if 'download_uri' in c:
                         dl_url = urljoin('https://fantia.jp', c['download_uri'])
-                        ex.submit(download, dl_url, filename=self.output / f'{id} {cid} {c["filename"]}', cookies={"_session_id": self.key}, verbose=1)
+                        ex.submit(download, dl_url, filename=self.output / f'{id} {cid} {c["filename"]}', headers=HEADERS, cookies={"_session_id": self.key}, verbose=1)
 
 if __name__ == "__main__":
     pass
