@@ -131,7 +131,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
 
     def has_valid_suffix(f):
         # common suffixes
-        if f.suffix.lower() in ['.jpg', '.png', '.gif', '.webp', '.jpeg', '.bmp', '.svg', '.ico', '.mp4', '.mkv', '.webm', '.heic']:
+        if f.suffix.lower() in ['.jpg', '.png', '.gif', '.webp', '.jpeg', '.bmp', '.svg', '.ico', '.mp4', '.mkv', '.webm', '.heic', '.pdf']:
             return True
         if f.suffix.lower() in ['.php', '']:
             return False
@@ -221,14 +221,20 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                             header_name = f'{prefix} ' + header_name
                         f = p / safeify(header_name)
             if (get_suffix or not has_valid_suffix(f)) and 'Content-Type' in r.headers: # Also find the file extension
-                header_suffix = '.' + r.headers['Content-Type'].split(';')[0].split('/')[-1].lower().replace('jpeg', 'jpg')
+                header_suffix = '.' + r.headers['Content-Type'].split(';')[0].split('/')[-1].lower().replace('jpeg', 'jpg').replace('svg+xml', 'svg')
                 if f.suffix.lower() in ['.php', '']:
                     f = f.with_suffix(header_suffix)
                 # this is to prevent the filename has dot in it, which causes Path to think part of stem is suffix.
                 # so we only replace the suffix that is <= 3 chars.
                 # Not ideal, but should be good enough.
                 elif has_valid_suffix(f):
-                    if f.suffix.lower() != header_suffix:
+                    # don't replace jpeg to jpg
+                    if header_suffix == '.jpg' and f.suffix.lower() in ['.jpg', '.jpeg']:
+                        pass
+                    # don't consider .octet-stream as a valid suffix
+                    if header_suffix == '.octet-stream':
+                        pass
+                    elif f.suffix.lower() != header_suffix:
                         print(f'[Warning] File suffix is different from the one in Content-Type header! {f.suffix.lower()} -> {header_suffix}', 1)
                         f = f.with_suffix(header_suffix)
                 # f has a weird suffix. We assume it's part of the name, so we just append the suffix.
