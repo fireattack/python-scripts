@@ -221,23 +221,35 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                             header_name = f'{prefix} ' + header_name
                         f = p / safeify(header_name)
             if (get_suffix or not has_valid_suffix(f)) and 'Content-Type' in r.headers: # Also find the file extension
-                header_suffix = '.' + r.headers['Content-Type'].split(';')[0].split('/')[-1].lower().replace('jpeg', 'jpg').replace('svg+xml', 'svg')
-                if f.suffix.lower() in ['.php', '']:
+                def get_ext(mime):
+                    from mimetypes import guess_extension
+                    if mime == 'application/octet-stream':
+                        # don't return .bin
+                        return ''
+                    guess = guess_extension(mime)
+                    if guess is not None:
+                        return guess
+                    return mime.split('/')[-1].lower()
+                header_suffix = get_ext(r.headers['Content-Type'].split(';')[0])
+                # if they're the same, we don't need to do anything
+                if f.suffix.lower() == header_suffix:
+                    pass
+                # if header_suffix is bad, don't do anything
+                elif header_suffix == '':
+                    pass
+                # don't replace jpeg to jpg
+                elif header_suffix == '.jpg' and f.suffix.lower() in ['.jpg', '.jpeg']:
+                    pass
+                # likely dynamic content, use header suffix instead
+                elif f.suffix.lower() in ['.php', '']:
                     f = f.with_suffix(header_suffix)
                 # this is to prevent the filename has dot in it, which causes Path to think part of stem is suffix.
                 # so we only replace the suffix that is <= 3 chars.
                 # Not ideal, but should be good enough.
                 elif has_valid_suffix(f):
-                    # don't replace jpeg to jpg
-                    if header_suffix == '.jpg' and f.suffix.lower() in ['.jpg', '.jpeg']:
-                        pass
-                    # don't consider .octet-stream as a valid suffix
-                    if header_suffix == '.octet-stream':
-                        pass
-                    elif f.suffix.lower() != header_suffix:
-                        print(f'[Warning] File suffix is different from the one in Content-Type header! {f.suffix.lower()} -> {header_suffix}', 1)
-                        f = f.with_suffix(header_suffix)
-                # f has a weird suffix. We assume it's part of the name, so we just append the suffix.
+                    print(f'[Warning] File suffix is different from the one in Content-Type header! {f.suffix.lower()} -> {header_suffix}', 1)
+                    f = f.with_suffix(header_suffix)
+                # f has a weird suffix. We assume it's part of the name stem, so we just append the header suffix.
                 else:
                     f = f.with_name(f.name + header_suffix)
 
