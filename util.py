@@ -394,6 +394,49 @@ def array_to_range_text(a, sep=', ', dash='-'):
     return s
 
 
+def compare_obj(value_old, value, print_prefix='ROOT'):
+    from rich import print
+
+    if isinstance(value, dict):
+        for key, v in value.items():
+            if key not in value_old:
+                print(f'{print_prefix}: found new key \'{key}\':')
+                print(v)
+            else:
+                v_old = value_old[key]
+                compare_obj(v_old, v, print_prefix=f'{print_prefix}.{key}')
+        return
+
+    if isinstance(value, list):
+        if len(value) == 1 and len(value_old) == 1:
+            value = value[0]
+            value_old = value_old[0]
+            compare_obj(value_old, value, print_prefix=f'{print_prefix}[0]')
+        try:
+            equal = sorted(value_old) == sorted(value)
+        except Exception:
+            equal = value_old == value
+    elif isinstance(value, str):
+        equal = re.sub(r'\s','', value_old) == re.sub(r'\s','', value)
+    else:
+        equal = value_old == value
+    if not equal:
+        print(f'{print_prefix}: data does not match with new one:')
+        if isinstance(value, str) or isinstance(value, int):
+            print('[red]Old:', value_old)
+            print('[green]New:', value)
+        else:
+            print('[red]======= Old =======')
+            if isinstance(value, list):
+                print('Items count: ', len(value_old))
+            print(value_old)
+            print('[green]======= New =======')
+            if isinstance(value, list):
+                print('Items count: ', len(value))
+            print(value)
+
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
