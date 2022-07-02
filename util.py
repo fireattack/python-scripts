@@ -1,7 +1,6 @@
 import builtins
 import requests
 from bs4 import BeautifulSoup
-import time
 import sys
 
 from pathlib import Path
@@ -41,6 +40,8 @@ def parse_to_shortdate(date_str):
 
 
 def load_cookie(filename):
+    import time
+
     from http.cookiejar import MozillaCookieJar
     cj = MozillaCookieJar(filename)
     cj.load(ignore_expires=True,ignore_discard=True)
@@ -372,6 +373,10 @@ def format_str(s, width=None, align='left'):
         return output + ' '*(width-length)
     if align == 'right':
         return ' '*(width-length) + output
+    if align == 'center':
+        left_space = (width-length)//2
+        right_space = width-length-left_space
+        return ' '*left_space + output + ' '*right_space
 
 
 def array_to_range_text(a, sep=', ', dash='-'):
