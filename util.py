@@ -107,7 +107,7 @@ def get(url, headers=None, cookies=None, encoding=None, session=None, parser='lx
 def ensure_nonexist(f):
     i = 2
     stem = f.stem
-    if m:= re.search(r'^(.+?)_(\d+)$', stem):
+    if m:= re.search(r'^(.+?)_(\d)$', stem):
         stem = m[1]
         i = int(m[2]) + 1
     while f.exists():
