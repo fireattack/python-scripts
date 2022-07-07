@@ -67,7 +67,7 @@ def get_orig(url, save_dir='.', test_mode=False, bad_file='delete'):
         print(f'    Likely re-compressed.')
 
     else:
-        print(f'    First try: not sure. Try to get a different one anyway.')
+        print(f'    Not sure. Try to get a different one anyway.')
 
     filesize = f.stat().st_size # cache filesize
     tries = 0
