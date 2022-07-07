@@ -17,22 +17,11 @@ def get(url):
     r.encodings = 'shift-jis'
     return BeautifulSoup(r.content, 'html.parser')
 
+def get_orig(url, save_dir='.', test_mode=False, bad_file='delete'):
 
-def download(url_or_res, f):
-    if isinstance(url_or_res, str):
-        r = requests.get(url_or_res, stream=True)
-    else:
-        r = url_or_res
-
-    with f.open('wb') as fio:
-        for chunk in r.iter_content(chunk_size=8192):
-            if chunk:
-                fio.write(chunk)
-
-def get_orig(url):
     def bytes_to_kb(bytes):
         bytes = int(bytes)
-        return f'{bytes/1000:.2f} KB'
+        return f'{bytes/1000:.3f} KB'
 
     def get_jpeg_quality(f):
         from subprocess import check_output
@@ -40,34 +29,86 @@ def get_orig(url):
         quality, sampling_factor = output.decode('utf8').split(';')
         return int(quality), sampling_factor
 
-    f = Path.cwd() / get_webname(url)
+    def download(url_or_res, f):
+        if isinstance(url_or_res, str):
+            r = requests.get(url_or_res, stream=True)
+        else:
+            r = url_or_res
+
+        with f.open('wb') as fio:
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    fio.write(chunk)
+
+    def check_quality(f):
+        size = f.stat().st_size
+        q, sampling_factor = get_jpeg_quality(f)
+        print(f'{bytes_to_kb(size)}, q{q}, {sampling_factor}')
+        if q == 85 and sampling_factor == '2x2,1x1,1x1':
+            return 'bad'
+        if q > 85:
+            return 'good'
+        return 'not sure'
+
+    save_dir = Path(save_dir)
+    print(f'Getting {url}')
+
+    web_name = get_webname(url)
+    f = save_dir / web_name
     download(url, f)
-    q, sampling_factor = get_jpeg_quality(f)
-    if q == 85 and sampling_factor == '2x2,1x1,1x1':
-        print(f'{f.name} is likely re-compressed: q{q} ({sampling_factor}). Trying to get original...')
-    else:
-        print(f'{f.name} is already original: q{q} ({sampling_factor}). Done!')
+
+    print('    First try: ', end='')
+    old_quality = check_quality(f)
+    if old_quality == 'good':
         f.rename(f.with_name(f'{f.stem}_orig.jpg'))
+        print(f'    Find original. Stop.')
         return True
+    if old_quality == 'bad':
+        print(f'    Likely re-compressed.')
+
+    else:
+        print(f'    First try: not sure. Try to get a different one anyway.')
+
     filesize = f.stat().st_size # cache filesize
     tries = 0
     while True:
         tries += 1
         r = requests.get(url, stream=True)
         if r.headers['Content-length'] == str(filesize):
-            print(f'{f.name}: remote is still the same size')
+            print(f'    Remote is still the same size.')
         else:
-            print(f'{f.name}: remote now is different ({bytes_to_kb(filesize)} -> {bytes_to_kb(r.headers["Content-length"])})')
+            print(f'    Got a different file: ', end='')
             savef = f.with_name(f'{f.stem}_orig.jpg')
             download(r, savef)
-            newq, new_sampling_factor = get_jpeg_quality(savef)
-            if newq == 85 and new_sampling_factor == '2x2,1x1,1x1':
-                continue
-            print(f'{f.name}: done! q{q} ({sampling_factor}) -> q{newq} ({new_sampling_factor})')
-            f.unlink()
+            new_quality = check_quality(savef)
+            new_filesize = savef.stat().st_size
+            if test_mode:
+                print(f'    Test mode. So keep both files.')
+                f.rename(f.with_name(f'{f.stem}_{filesize}.jpg'))
+                savef.rename(f.with_name(f'{f.stem}_{new_filesize}.jpg'))
+                return True
+            # potential results:
+            # bad -> good, not sure -> good: keep new
+            if old_quality == 'bad' and new_quality == 'good' \
+                or old_quality == 'not sure' and new_quality == 'good':
+                print(f'    New file is original. Stop and cleanup.')
+                if bad_file == 'delete':
+                    f.unlink()
+                elif bad_file == 'keep':
+                    f.rename(f.with_name(f'{f.stem}_bad.jpg'))
+                elif bad_file == 'move_to_subfolder':
+                    (save_dir / 'tobedel').mkdir(exist_ok=True)
+                    f.rename(save_dir / 'tobedel' / f.name)
+                savef.rename(f.with_name(f'{f.stem}_orig.jpg'))
+                return True
+            # bad -> not sure, bad -> bad, not sure -> not sure, not sure -> bad: keep both
+            print('    Not sure which one is better. Save both. Please check yourself.')
+            f.rename(f.with_name(f'{f.stem}_{filesize}.jpg'))
+            savef.rename(f.with_name(f'{f.stem}_{new_filesize}.jpg'))
             return True
+
         if tries > 100:
-            print(f'Failed to get uncompressed version of {url} after 100 tries.')
+            print(f'    Failed to get a different version of {url} after 100 tries.')
             return True
 
 def main(url):
@@ -81,7 +122,7 @@ def main(url):
             img_url_candidates.append(soup.select_one('div#main_photo img')['src'])
 
     url = re.sub(r'/news/(\d+)/*.+$', r'/news/\1/photo/1/', url)
-    print(f'Getting images from {url}')
+    print(f'Getting image from {url}')
     soup = get(url)
 
     get_image_from_photo_page(soup)
