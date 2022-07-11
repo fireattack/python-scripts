@@ -402,7 +402,10 @@ def array_to_range_text(a, sep=', ', dash='-'):
 def compare_obj(value_old, value, print_prefix='ROOT'):
     from rich import print
 
-    if isinstance(value, dict):
+    if type(value_old) != type(value):
+        print(f'{print_prefix}: warning: data changes type from {type(value_old)} to {type(value)}.')
+        equal = False
+    elif isinstance(value, dict):
         for key, v in value.items():
             if key not in value_old:
                 print(f'{print_prefix}: found new key \'{key}\':')
@@ -411,8 +414,7 @@ def compare_obj(value_old, value, print_prefix='ROOT'):
                 v_old = value_old[key]
                 compare_obj(v_old, v, print_prefix=f'{print_prefix}.{key}')
         return
-
-    if isinstance(value, list):
+    elif isinstance(value, list):
         if len(value) == 1 and len(value_old) == 1:
             value = value[0]
             value_old = value_old[0]
