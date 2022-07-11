@@ -121,20 +121,59 @@ def main(url):
         else:
             img_url_candidates.append(soup.select_one('div#main_photo img')['src'])
 
-    url = re.sub(r'/news/(\d+)/*.+$', r'/news/\1/photo/1/', url)
-    print(f'Getting image from {url}')
-    soup = get(url)
+    if re.search(r'oricon\.co\.jp/news/', url):
+        print(f'{url}: news type')
+        url = re.sub(r'/news/(\d+)/*.+$', r'/news/\1/photo/1/', url)
+        print(f'Getting image from {url}')
+        soup = get(url)
 
-    get_image_from_photo_page(soup)
+        get_image_from_photo_page(soup)
 
-    for a in soup.select(('div.photo_slider li > a')):
-        new_url = urljoin(url, a['href'])
-        if new_url == url:
-            continue
-        print(f'Getting image from {new_url}')
-        soup2 = get(new_url)
-        get_image_from_photo_page(soup2)
-    img_url_candidates = list(dict.fromkeys(img_url_candidates))
+        for a in soup.select(('div.photo_slider li > a')):
+            new_url = urljoin(url, a['href'])
+            if new_url == url:
+                continue
+            print(f'Getting image from {new_url}')
+            soup2 = get(new_url)
+            get_image_from_photo_page(soup2)
+        img_url_candidates = list(dict.fromkeys(img_url_candidates))
+    elif m := re.search(r'oricon\.co\.jp/(photo|special)/\d+', url):
+        page_type = m[1]
+        # https://www.oricon.co.jp/special/785/
+        url = re.sub(r'/(photo|special)/(\d+)/*.+$', r'/\1/\2/', url)
+        print(f'{url}: {page_type} type')
+
+        img_urls = {}
+
+        while True:
+            print(f'Getting image from {url}')
+            soup = get(url)
+            for img in soup.find_all('img'):
+                img_url = None
+                for attr in ['data-original', 'src']:
+                    if img.has_attr(attr):
+                        img_url = img[attr]
+                        break
+                assert img_url is not None
+                if (m := re.search(r'^(.+/(?:photo|special)/img/\d+/\d+/detail/img)(\d+)(/.+$)', img_url)):
+                    if not m[3] in img_urls:
+                        img_urls[m[3]] = m[1]
+                    else:
+                        assert img_urls[m[3]] == m[1]
+            if soup.select_one('a.pager-next'):
+                url = urljoin(url, soup.select_one('a.pager-next')['href'])
+            else:
+                break
+        for suffix, prefix in img_urls.items():
+            for size in [1500, 660, 480, 200, 100]:
+                img_url = f'{prefix}{size}{suffix}'
+                if requests.head(img_url).status_code == 200:
+                    print(f'Find a valid image: {img_url}')
+                    img_url_candidates.append(img_url)
+                    break
+    else:
+        print(f'{url}: not a valid URL.')
+        return
 
     for photo_url in img_url_candidates:
         get_orig(photo_url)

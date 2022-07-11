@@ -1,6 +1,10 @@
 # python
- 
-Some small Python utilities 
+
+Some small Python utilities.
+
+## `oricon.py`
+
+Quickly download all the highest quality pictures from any Oricon news, special or photo article.
 
 ## `scraper_ameblo_api.py`
 
@@ -47,7 +51,7 @@ from scraper_radiko import RadikoExtractor
 # http://www.joqr.co.jp/timefree/mss.php
 # http://radiko.jp/share/?sid=QRR&t=20200822260000
 # http://radiko.jp/#!/ts/QRR/20200823020000
-url = 'http://www.joqr.co.jp/timefree/mss.php'    
+url = 'http://www.joqr.co.jp/timefree/mss.php'
 
 e = RadikoExtractor(url, save_dir='/output')
 e.parse()
@@ -57,5 +61,3 @@ e.parse()
 
 Some utility functions mainly for myself. Read the code to get the idea. Some highlights:
 * download - a generic downloader
-
-..well that's it. Others are some super simple stuff.
