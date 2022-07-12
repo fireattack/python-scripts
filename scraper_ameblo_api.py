@@ -4,7 +4,7 @@ import requests
 from urllib.parse import urljoin
 import concurrent.futures
 import json
-from dateutil import parser
+from dateutil import parser as dateparser
 
 from util import safeify, download, get, dump_json
 
@@ -45,11 +45,11 @@ def download_text(blog_id, id, save_folder='.'):
         title = b['entry_title']
         text = b['entry_text']
         time = b['entry_created_datetime']
-        date = parser.parse(time).strftime('%y%m%d_%H%M%S') # keep HMS as well for text
+        date = dateparser.parse(time).strftime('%y%m%d_%H%M%S') # keep HMS as well for text
 
         #Dump
         text_folder = Path(save_folder) / 'text'
-        text_folder.mkdir(exist_ok=True)
+        text_folder.mkdir(exist_ok=True, parents=True)
         stem = f'{date} ameblo_{blog_id}_{id} {title}'
 
         html = text_folder / safeify(f'{stem}.html')
@@ -58,7 +58,7 @@ def download_text(blog_id, id, save_folder='.'):
             return
         html.write_text(text, encoding='utf8')
         metadata_folder = Path(save_folder) / 'metadata'
-        metadata_folder.mkdir(exist_ok=True)
+        metadata_folder.mkdir(exist_ok=True, parents=True)
         metadata = metadata_folder / safeify(f'{stem}.json')
         dump_json(b, metadata)
     else:
@@ -82,22 +82,50 @@ def parse_image_list(blog_id, start_entry, until=None):
         start_entry = re.search(r'/entries/(\d+)/', myjson['paging']['nextUrl'])[1]
 
 
-def parse_list(blog_id, limit=10, until=None):
+def parse_list(blog_id, theme_name=None, limit=10, until=None):
     try: # Get blog_num_id
         soup = get(f'https://ameblo.jp/{blog_id}/')
         data = load_init_data(soup)
         blog_num_id = first(data['bloggerState']['bloggerMap'])['blog']
+        endpoint = f'https://ameblo.jp/_api/blogEntries;blogId={blog_num_id};'
+
+        if theme_name:
+            # get themes
+            first_theme_id = first(data['bloggerState']['blogMap'])['moblog_theme_id']
+            soup2 = get(f'https://ameblo.jp/{blog_id}/theme-{first_theme_id}.html')
+            data2 = load_init_data(soup2)
+            themes = data2['themesState']['themeMap']
+            theme_id_to_be_used = None
+            print('Available theme:')
+            for theme_id, info in themes.items():
+                name = info['theme_name']
+                count = info['entry_cnt']
+                print(f'{name} (id: {theme_id}, count: {count})')
+                if name == theme_name:
+                    theme_id_to_be_used = theme_id
+            if not theme_id_to_be_used:
+                print(f'[E] target theme \'{theme_name}\' not found in themes! Stop.')
+                return []
+            endpoint = f'https://ameblo.jp/_api/blogThemeEntries;blogId={blog_num_id};themeId={theme_id_to_be_used};'
+
     except Exception as ex:
-        print(f'[E] cannot get blog_num_id for {blog_id}.')
+        print(f'[E] failed when parsing frontpage for {blog_id}.')
         print(ex)
+        return []
 
     ids = []
     offset = 0
     while True:
-        url = f'https://ameblo.jp/_api/blogEntries;blogId={blog_num_id};limit={limit};offset={offset}'
+        url = f'{endpoint}limit={limit};offset={offset}'
         print(f'Loading {url}...')
         data = requests.get(url).json()
-        blogs = data['entities']['entryMap']
+
+        if theme_name:
+            blogs = data['entryMap']
+            paging =  data['paging']
+        else:
+            blogs = data['entities']['entryMap']
+            paging = first(data['entities']['blogPageMap'])['paging']
         for entry_id, entry in blogs.items():
             if entry['publish_flg'] == 'amember':
                 print(f'[W] cannot get post {entry_id} since it\'s amember only.')
@@ -106,15 +134,15 @@ def parse_list(blog_id, limit=10, until=None):
                 print(f'Reached last record {until}! Stop.')
                 return ids
             ids.append(entry_id)
-        offset = first(data['entities']['blogPageMap'])['paging']['next']
-        total_count = first(data['entities']['blogPageMap'])['paging']['total_count']
+        offset = paging['next']
+        total_count = paging['total_count']
         if total_count == offset:
             print('Reach end of the list. Stop.')
             return ids
 
 
-def download_all(blog_id, save_folder='.', executor=None, until=None, limit=10, download_type='image'):
-    results = parse_list(blog_id, until=until, limit=limit)
+def download_all(blog_id, save_folder='.', theme_name=None, executor=None, until=None, limit=10, download_type='image'):
+    results = parse_list(blog_id, until=until, limit=limit, theme_name=theme_name)
     if not results:
         print('No new entry found.')
         return
@@ -130,3 +158,18 @@ def download_all(blog_id, save_folder='.', executor=None, until=None, limit=10, 
             executor.submit(download_text, blog_id, id, save_folder)
     if shutdown_executor_inside:
         executor.shutdown()
+        print('Done!')
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='Download ameblo images and texts.')
+    parser.add_argument('blog_id', help='ameblo blog id')
+    parser.add_argument('--theme', help='ameblo theme name')
+    parser.add_argument('--output', '-o', help='folder to save images and texts (default: CWD/{blog_id})')
+    parser.add_argument('--until', help='download until this entry id (non-inclusive)')
+    parser.add_argument('--type', default='image', help='download type (image, text, all)')
+
+    args = parser.parse_args()
+    save_folder = args.output if args.output else args.blog_id
+    download_all(args.blog_id, save_folder=save_folder, theme_name=args.theme, until=args.until, limit=500, download_type=args.type)
