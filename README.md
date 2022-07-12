@@ -6,16 +6,44 @@ Some small Python utilities.
 
 Quickly download all the highest quality pictures from any Oricon news, special or photo article.
 
+Usage:
+
+```
+oricon.py https://www.oricon.co.jp/news/2236438/
+```
+
 ## `scraper_ameblo_api.py`
 
 [Ameblo](https://ameblo.jp/) (アメーバブログ or アメブロ, Japanese blog service) downloader. Supports images and text.
 
 Usage:
 
+Note: make sure you also downloaded `util.py` file from the same directory.
+
+CLI:
+
+```
+usage: scraper_ameblo_api.py [-h] [--theme THEME] [--output OUTPUT] [--until UNTIL] [--type TYPE] blog_id
+
+Download ameblo images and texts.
+
+positional arguments:
+  blog_id               ameblo blog id
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --theme THEME         ameblo theme name
+  --output OUTPUT, -o OUTPUT
+                        folder to save images and texts (default: CWD/{blog_id})
+  --until UNTIL         download until this entry id (non-inclusive)
+  --type TYPE           download type (image, text, all)
+```
+As Python module:
+
 ```python
 from scraper_ameblo_api import download_all
 
-download_all('user_id', save_folder='.', until=None, last_entry='auto', download_type='all')
+download_all('user_id', save_folder='.', limit=100, download_type='all')
 ```
 
 ## `scraper_fantia.py`
@@ -27,8 +55,8 @@ Usage:
 ```python
 from scraper_fantia import FantiaDownloader
 
-key = 'your _session_id' # copy it from cookie `_session_id` on fantia.jp
-id = 1111111111111111111
+key = 'your {_session_id}' # copy it from cookie `_session_id` on fantia.jp
+id = 11111 # FC id copied from URL
 downloader = FantiaDownloader(fanclub=id, output=".", key=key)
 downloader.downloadAll()
 ```
@@ -42,6 +70,8 @@ downloader.getPostPhotos(12345)
 
 ## `scraper_radiko.py`
 
+Note: you need to prepare the JP proxy yourself.
+
 Usage:
 
 ```python
@@ -51,6 +81,7 @@ from scraper_radiko import RadikoExtractor
 # http://www.joqr.co.jp/timefree/mss.php
 # http://radiko.jp/share/?sid=QRR&t=20200822260000
 # http://radiko.jp/#!/ts/QRR/20200823020000
+
 url = 'http://www.joqr.co.jp/timefree/mss.php'
 
 e = RadikoExtractor(url, save_dir='/output')
@@ -59,5 +90,12 @@ e.parse()
 
 ## `util.py`
 
-Some utility functions mainly for myself. Read the code to get the idea. Some highlights:
+Some utility functions mainly for myself. Read the code to get the idea.
+
+Some highlights:
+
 * download - a generic downloader
+* format_str - format a string to certain width and alignment. Supports wide characters like Chinese and Japanese.
+* compare_obj - recursively compare two objects.
+* Table - a simple table class.
+* parse_to_shortdate - parse a date string to a short date string ('%y%m%d'). Supports more East Asian language formats than `dateutil.parser`.
