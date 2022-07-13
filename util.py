@@ -77,6 +77,7 @@ def dump_json(mydict, filename):
     filename = Path(filename)
     if filename.suffix.lower() !='.json':
         filename = filename.with_suffix('.json')
+    filename.parent.mkdir(parents=True, exist_ok=True)
     with filename.open('w', encoding='utf-8') as f:
         json.dump(mydict, f, ensure_ascii=False, indent=2)
 
