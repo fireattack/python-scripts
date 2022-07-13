@@ -111,15 +111,26 @@ def get_orig(url, save_dir='.', test_mode=False, bad_file='delete'):
             print(f'    Failed to get a different version of {url} after 100 tries.')
             return True
 
+def get_image_from_photo_page(soup):
+    if (ele := soup.find('meta', {'property': 'og:image'})) and ele.has_attr('content'):
+        url = ele['content']
+        url = re.sub(r'cdn-cgi/image/[^/]+/upimg', 'upimg', url)
+        return url
+    else:
+        return soup.select_one('div#main_photo img')['src']
+
+def single(url):
+    if re.search(r'oricon\.co\.jp/news/\d+/photo/\d+', url):
+        img_url = get_image_from_photo_page(get(url))
+    elif 'contents.oricon.co.jp' in url:
+        img_url = url
+    else:
+        print(f'Invalid url: {url}')
+        return False
+    get_orig(img_url)
+
 def main(url):
     img_url_candidates = []
-    def get_image_from_photo_page(soup):
-        if (ele := soup.find('meta', {'property': 'og:image'})) and ele.has_attr('content'):
-            url = ele['content']
-            url = re.sub(r'cdn-cgi/image/[^/]+/upimg', 'upimg', url)
-            img_url_candidates.append(url)
-        else:
-            img_url_candidates.append(soup.select_one('div#main_photo img')['src'])
 
     if re.search(r'oricon\.co\.jp/news/', url):
         print(f'{url}: news type')
@@ -127,7 +138,7 @@ def main(url):
         print(f'Getting image from {url}')
         soup = get(url)
 
-        get_image_from_photo_page(soup)
+        img_url_candidates.append(get_image_from_photo_page(soup))
 
         for a in soup.select(('div.photo_slider li > a')):
             new_url = urljoin(url, a['href'])
@@ -135,7 +146,7 @@ def main(url):
                 continue
             print(f'Getting image from {new_url}')
             soup2 = get(new_url)
-            get_image_from_photo_page(soup2)
+            img_url_candidates.append(get_image_from_photo_page(soup2))
         img_url_candidates = list(dict.fromkeys(img_url_candidates))
     elif m := re.search(r'oricon\.co\.jp/(photo|special)/\d+', url):
         page_type = m[1]
@@ -189,5 +200,9 @@ if __name__ == '__main__':
         print('Usage: oricon.py <url>')
         sys.exit(1)
     else:
-        url = sys.argv[1]
-        main(url)
+        if len(sys.argv) == 3 and sys.argv[1] == 'single':
+            url = sys.argv[2]
+            single(url)
+        else:
+            url = sys.argv[1]
+            main(url)
