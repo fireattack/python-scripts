@@ -1,9 +1,8 @@
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
 from shutil import which
-from urllib.parse import urljoin, unquote
-
+from urllib.parse import unquote, urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -125,7 +124,7 @@ def single(url):
     elif 'contents.oricon.co.jp' in url:
         img_url = url
     else:
-        print(f'Invalid url: {url}')
+        print(f'{url}: not a valid URL for single mode.')
         return False
     get_orig(img_url)
 

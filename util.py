@@ -20,17 +20,15 @@ def to_list(a):
 def parse_to_shortdate(date_str):
     from dateutil import parser
 
-    date_str = date_str.replace('\s+',' ').strip()
-    res = [r'(\d+)年 *(\d+)月 *(\d+)日', r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})']
-    for r in res:
-        m = re.search(r, date_str)
-        if m:
+    date_str = re.sub(r'[\s　]+', ' ', date_str).strip()
+    patterns = [r'(\d+)年 *(\d+)月 *(\d+)日', r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})']
+    for pattern in patterns:
+        if m := re.search(pattern, date_str):
             date_str = m[1] + m[2].zfill(2) + m[3].zfill(2)
             break
         # Sometimes the string has extra spaces. But this is dangerous since things like `2014/3/7 23:52` will be parsed as `20140372`.
         # But it *should* have been caught by the `m` above already, so 99% of the cases it should be fine.
-        m2 = re.search(r, date_str.replace(' ', ''))
-        if m2:
+        if m2 := re.search(pattern, date_str.replace(' ', '')):
             date_str = m2[1] + m2[2].zfill(2) + m2[3].zfill(2)
             break
     try:
