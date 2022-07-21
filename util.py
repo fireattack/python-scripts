@@ -223,12 +223,16 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
             if (get_suffix or not has_valid_suffix(f)) and 'Content-Type' in r.headers: # Also find the file extension
                 def get_ext(mime):
                     from mimetypes import guess_extension
+                    # don't return .bin
                     if mime == 'application/octet-stream':
-                        # don't return .bin
                         return ''
+                    # manually replace some weird ones
+                    if mime == 'audio/mp4':
+                        return '.m4a'
                     guess = guess_extension(mime)
                     if guess is not None:
                         return guess
+                    # last resort
                     return mime.split('/')[-1].lower()
                 header_suffix = get_ext(r.headers['Content-Type'].split(';')[0])
                 # if they're the same, we don't need to do anything
@@ -237,8 +241,11 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                 # if header_suffix is bad, don't do anything
                 elif header_suffix == '':
                     pass
-                # don't replace jpeg to jpg
-                elif header_suffix == '.jpg' and f.suffix.lower() in ['.jpg', '.jpeg']:
+                # don't replace jpeg to jpg or vice versa
+                elif header_suffix in ['.jpg', '.jpeg'] and f.suffix.lower() in ['.jpg', '.jpeg']:
+                    pass
+                # don't replace m4a to mp4 or vice versa
+                elif header_suffix in ['.mp4', '.m4a'] and f.suffix.lower() in ['.m4a', '.mp4']:
                     pass
                 # likely dynamic content, use header suffix instead
                 elif f.suffix.lower() in ['.php', '']:

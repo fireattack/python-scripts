@@ -146,7 +146,6 @@ def main(url):
             print(f'Getting image from {new_url}')
             soup2 = get(new_url)
             img_url_candidates.append(get_image_from_photo_page(soup2))
-        img_url_candidates = list(dict.fromkeys(img_url_candidates))
     elif m := re.search(r'oricon\.co\.jp/(photo|special)/\d+', url):
         page_type = m[1]
         # https://www.oricon.co.jp/special/785/
@@ -184,6 +183,8 @@ def main(url):
     else:
         print(f'{url}: not a valid URL.')
         return
+
+    img_url_candidates = list(dict.fromkeys(img_url_candidates))
 
     for photo_url in img_url_candidates:
         get_orig(photo_url)
