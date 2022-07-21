@@ -6,7 +6,7 @@ import concurrent.futures
 import json
 from dateutil import parser as dateparser
 
-from util import safeify, download, get, dump_json
+from util import safeify, download, get, dump_json, parse_to_shortdate
 
 def load_init_data(soup):
     for script in soup('script'):
@@ -26,12 +26,14 @@ def download_image(blog_id, id, save_folder='.'):
             img_url = urljoin('https://stat.ameba.jp/', img['imgUrl'])
             img_url = re.sub(r'^(.+)\?(.+)$', r'\1', img_url)  # Remove parameters
             img_url = re.sub(r'\/t[0-9]*_([^/]*)$', r'/o\1', img_url)
-            date = re.search(r'user_images/(\d+)/', img_url)[1]
-            date = date[2:] # remove 20
+            date = parse_to_shortdate(img['date'])
+            img_date = parse_to_shortdate(re.search(r'user_images/(\d+)/', img_url)[1])
+            if date != img_date:
+                img_date = f'{date} ({img_date})'
             file_name = img_url.split('/')[-1]
             desc = img['title']
             desc_ = f'{desc}_{idx}' if len(data['data']) > 1 else desc
-            img_name = safeify(f'{date} ameblo_{blog_id}_{id} {desc_} {file_name}')
+            img_name = safeify(f'{img_date} ameblo_{blog_id}_{id} {desc_} {file_name}')
             ex.submit(download, img_url, Path(save_folder) / img_name, dupe='skip', verbose=1)
 
 def download_text(blog_id, id, save_folder='.'):
