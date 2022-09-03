@@ -227,7 +227,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                     if mime == 'application/octet-stream':
                         return ''
                     # manually replace some weird ones
-                    if mime == 'audio/mp4':
+                    if mime == 'audio/mp4' or mime == 'audio/x-m4a':
                         return '.m4a'
                     guess = guess_extension(mime)
                     if guess is not None:
@@ -239,7 +239,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                 if f.suffix.lower() == header_suffix:
                     pass
                 # if header_suffix is bad, don't do anything
-                elif header_suffix == '':
+                elif header_suffix == '' or '-' in header_suffix:
                     pass
                 # don't replace jpeg to jpg or vice versa
                 elif header_suffix in ['.jpg', '.jpeg'] and f.suffix.lower() in ['.jpg', '.jpeg']:
@@ -407,6 +407,7 @@ def array_to_range_text(a, sep=', ', dash='-'):
 
 def compare_obj(value_old, value, print_prefix='ROOT'):
     from rich import print
+    equal = True
 
     if type(value_old) != type(value):
         print(f'{print_prefix}: warning: data changes type from {type(value_old)} to {type(value)}.')
@@ -418,17 +419,19 @@ def compare_obj(value_old, value, print_prefix='ROOT'):
                 print(v)
             else:
                 v_old = value_old[key]
-                compare_obj(v_old, v, print_prefix=f'{print_prefix}.{key}')
-        return
+                equal &= compare_obj(v_old, v, print_prefix=f'{print_prefix}.{key}')
+        return equal
     elif isinstance(value, list):
         if len(value) == 1 and len(value_old) == 1:
             value = value[0]
             value_old = value_old[0]
-            compare_obj(value_old, value, print_prefix=f'{print_prefix}[0]')
-        try:
-            equal = sorted(value_old) == sorted(value)
-        except Exception:
-            equal = value_old == value
+            equal &= compare_obj(value_old, value, print_prefix=f'{print_prefix}[0]')
+            return equal
+        else:
+            try:
+                equal = sorted(value_old) == sorted(value)
+            except Exception:
+                equal = value_old == value
     elif isinstance(value, str):
         equal = re.sub(r'\s','', value_old) == re.sub(r'\s','', value)
     else:
@@ -447,7 +450,7 @@ def compare_obj(value_old, value, print_prefix='ROOT'):
             if isinstance(value, list):
                 print('Items count: ', len(value))
             print(value)
-
+    return equal
 
 
 if __name__ == "__main__":
