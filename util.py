@@ -301,14 +301,25 @@ def hello(a, b):
     print(f'hello: {a} and {b}')
 
 def get_files(directory, recursive=False, file_filter=None, path_filter=None):
-    dirpath = Path(directory)
-    assert(dirpath.is_dir())
+    directory = Path(directory)
+    assert(directory.is_dir())
+    # if there is no filter, use scandir generator, since it is so much faster.
+    if file_filter is None and path_filter is None:
+        from os import scandir
+        def quick_scan(directory):
+            for entry in scandir(directory):
+                if recursive and entry.is_dir(follow_symlinks=False):
+                    yield from quick_scan(entry.path)
+                else:
+                    yield entry
+        return [Path(f) for f in quick_scan(directory)]
+    # else, use pathlib.iterdir and just dynamically change the list. The speed is basically the same (slow).
     file_list = []
-    for x in dirpath.iterdir():
+    for x in directory.iterdir():
         if x.is_file():
             if not file_filter or file_filter(x):
                 file_list.append(x)
-        elif x.is_dir() and recursive and (not path_filter or path_filter(x)):
+        elif recursive and x.is_dir() and (not path_filter or path_filter(x)):
             file_list.extend(get_files(x, recursive=recursive, file_filter=file_filter, path_filter=path_filter))
     return file_list
 
