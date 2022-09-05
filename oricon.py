@@ -16,29 +16,29 @@ def get(url):
     r.encodings = 'shift-jis'
     return BeautifulSoup(r.content, 'html.parser')
 
+def get_jpeg_quality(f):
+    from subprocess import check_output
+
+    output = check_output(['magick', 'identify', '-format', '%Q;%[jpeg:sampling-factor]', f])
+    quality, sampling_factor = output.decode('utf8').split(';')
+    return int(quality), sampling_factor
+
+def bytes_to_kb(bytes):
+    bytes = int(bytes)
+    return f'{bytes/1000:.3f} KB'
+
+def download(url_or_res, f):
+    if isinstance(url_or_res, str):
+        r = requests.get(url_or_res, stream=True)
+    else:
+        r = url_or_res
+
+    with f.open('wb') as fio:
+        for chunk in r.iter_content(chunk_size=8192):
+            if chunk:
+                fio.write(chunk)
+
 def get_orig(url, save_dir='.', test_mode=False, bad_file='delete'):
-
-    def bytes_to_kb(bytes):
-        bytes = int(bytes)
-        return f'{bytes/1000:.3f} KB'
-
-    def get_jpeg_quality(f):
-        from subprocess import check_output
-        output = check_output(['magick', 'identify', '-format', '%Q;%[jpeg:sampling-factor]', f])
-        quality, sampling_factor = output.decode('utf8').split(';')
-        return int(quality), sampling_factor
-
-    def download(url_or_res, f):
-        if isinstance(url_or_res, str):
-            r = requests.get(url_or_res, stream=True)
-        else:
-            r = url_or_res
-
-        with f.open('wb') as fio:
-            for chunk in r.iter_content(chunk_size=8192):
-                if chunk:
-                    fio.write(chunk)
-
     def check_quality(f):
         size = f.stat().st_size
         q, sampling_factor = get_jpeg_quality(f)
