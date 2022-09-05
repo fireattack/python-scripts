@@ -92,6 +92,21 @@ def safeify(name):
         name = name.replace(illegal, template[illegal])
     return name
 
+def tic():
+    import time
+
+    global _start_time
+    _start_time = time.time()
+
+def tac(print=True):
+    import time
+    import builtins
+    global _start_time
+
+    t = time.time() - _start_time
+    if print:
+        builtins.print(f'Time passed: {t:.2f} s')
+    return t
 
 def get(url, headers=None, cookies=None, encoding=None, session=None, parser='lxml'):
     if not session:
