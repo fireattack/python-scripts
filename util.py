@@ -308,10 +308,10 @@ def get_files(directory, recursive=False, file_filter=None, path_filter=None):
         from os import scandir
         def quick_scan(directory):
             for entry in scandir(directory):
-                if recursive and entry.is_dir(follow_symlinks=False):
-                    yield from quick_scan(entry.path)
-                else:
+                if entry.is_file():
                     yield entry
+                elif recursive and entry.is_dir(follow_symlinks=False):
+                    yield from quick_scan(entry.path)
         return [Path(f) for f in quick_scan(directory)]
     # else, use pathlib.iterdir and just dynamically change the list. The speed is basically the same (slow).
     file_list = []
