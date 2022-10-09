@@ -129,6 +129,28 @@ def ensure_nonexist(f):
         i = i + 1
     return f
 
+def get_current_time(now=None):
+    from datetime import datetime
+    import pytz
+
+    tz = pytz.timezone('Asia/Tokyo')
+
+    if now is None:
+        now = datetime.now()
+    jst_now = now.astimezone(tz)
+
+    return {
+        'local': {
+            'obj': now,
+            'str_pretty': now.strftime('%Y-%m-%d (%a) %H:%M:%S'),
+            'str_short': now.strftime('%y%m%d_%H%M%S'),
+        },
+        'jst': {
+            'obj': jst_now,
+            'str_pretty': jst_now.strftime('%Y-%m-%d (%a) %H:%M:%S'),
+            'str_short': jst_now.strftime('%y%m%d_%H%M%S'),
+        }
+    }
 
 def download(url, filename=None, save_path='.', cookies=None, session=None, dry_run=False,
              dupe='skip_same_size', referer=None, headers=None, placeholder=True, prefix='', get_suffix=True, verbose=2):
