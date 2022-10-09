@@ -93,7 +93,7 @@ def parse_list(blog_id, theme_name=None, limit=10, until=None):
 
         if theme_name:
             # get themes
-            first_theme_id = first(data['bloggerState']['blogMap'])['moblog_theme_id']
+            first_theme_id = first(data['bloggerState']['blogMap']).get('moblog_theme_id', None) or first(data['entryState']['entryMap']).get('theme_id', None)
             soup2 = get(f'https://ameblo.jp/{blog_id}/theme-{first_theme_id}.html')
             data2 = load_init_data(soup2)
             themes = data2['themesState']['themeMap']
