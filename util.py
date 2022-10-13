@@ -152,6 +152,32 @@ def get_current_time(now=None):
         }
     }
 
+
+def batch_rename(renamings):
+    '''
+    Non-conflict batch rename.
+    renamings: list of (Path object, newname)'''
+
+    files = [f for f, _ in renamings]
+    dst_files = [f.with_name(name) for f, name in renamings]
+    # if new filename is conflicting and not in our current files, abort
+    for new_f in dst_files:
+        if new_f.exists() and new_f not in files:
+            print(f'[E] file {new_f.name} already exists. Please rename it first.')
+            return
+    # rename current file(s) to temp filename to make renaming possible
+    real_renamings = []
+    for f, name in renamings:
+        if f in dst_files:
+            temp_f = ensure_nonexist(f.with_name(f.stem + '_temp' + f.suffix))
+            print(f'[W] temporarily rename {f} to {temp_f}')
+            f = f.rename(temp_f)
+        real_renamings.append((f, name))
+
+    for f, name in real_renamings:
+        f.rename(f.with_name(name))
+
+
 def download(url, filename=None, save_path='.', cookies=None, session=None, dry_run=False,
              dupe='skip_same_size', referer=None, headers=None, placeholder=True, prefix='', get_suffix=True, verbose=2):
     if dupe not in ['skip', 'overwrite', 'rename', 'skip_same_size']:
