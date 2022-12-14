@@ -1,12 +1,11 @@
 import re
 from pathlib import Path
-import requests
 from urllib.parse import urljoin
 import concurrent.futures
 import json
 from dateutil import parser as dateparser
 
-from util import safeify, download, get, dump_json, parse_to_shortdate
+from util import safeify, download, get, dump_json, parse_to_shortdate, requests_retry_session
 
 def load_init_data(soup):
     for script in soup('script'):
@@ -19,7 +18,7 @@ def first(my_dict):
 
 def download_image(blog_id, id, save_folder='.'):
     # print(f'Processing {id}...')
-    data = requests.get(f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{id}/images').json()
+    data = requests_retry_session().get(f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{id}/images').json()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
         for idx, img in enumerate(data['data'], 1):
@@ -71,7 +70,7 @@ def parse_image_list(blog_id, start_entry, until=None):
     results = []
     while True:
         print(f'Parsing {blog_id} starting from {start_entry}...')
-        myjson = requests.get(
+        myjson = requests_retry_session().get(
             f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{start_entry}/neighbors?limit=100').json()
         for entry in myjson['data']:
             id = entry["entryId"]
@@ -120,7 +119,7 @@ def parse_list(blog_id, theme_name=None, limit=10, until=None):
     while True:
         url = f'{endpoint}limit={limit};offset={offset}'
         print(f'Loading {url}...')
-        data = requests.get(url).json()
+        data = requests_retry_session().get(url).json()
 
         if theme_name:
             blogs = data['entryMap']
