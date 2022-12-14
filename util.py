@@ -8,6 +8,27 @@ import json
 import re
 from urllib.parse import unquote
 
+# Modiifed from https://www.peterbe.com/plog/best-practice-with-retries-with-requests
+def requests_retry_session(
+    retries=5,
+    backoff_factor=0.2,
+    status_forcelist=None, # (500, 502, 504)
+    session=None,
+):
+    import requests
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+
+    session = session or requests.Session()
+    retry = Retry(
+        total=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
 
 def get_webname(url):
     return unquote(url.split('?')[0].split('/')[-1])
@@ -170,7 +191,7 @@ def batch_rename(renamings):
     for f, name in renamings:
         if f in dst_files:
             temp_f = ensure_nonexist(f.with_name(f.stem + '_temp' + f.suffix))
-            print(f'[W] temporarily rename {f} to {temp_f}')
+            print(f'[I] temporarily rename {f.name} to {temp_f.name}')
             f = f.rename(temp_f)
         real_renamings.append((f, name))
 
@@ -183,8 +204,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
     if dupe not in ['skip', 'overwrite', 'rename', 'skip_same_size']:
         raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite, rename or skip_same_size).')
 
-    if not session:
-        session = requests.Session()
+    session = requests_retry_session(session=session)
     if headers:
         session.headers.update(headers)
 
@@ -296,7 +316,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                     if guess is not None:
                         return guess
                     # last resort
-                    return mime.split('/')[-1].lower()
+                    return '.' + mime.split('/')[-1].lower()
                 header_suffix = get_ext(r.headers['Content-Type'].split(';')[0])
                 # if they're the same, we don't need to do anything
                 if f.suffix.lower() == header_suffix:
@@ -388,12 +408,15 @@ def get_files(directory, recursive=False, file_filter=None, path_filter=None):
 
 def remove_empty_folders(directory, remove_root=True): #Including root.
     directory = Path(directory)
-    assert(directory.is_dir())
-    for x in directory.iterdir():
-        if x.is_dir():
-            remove_empty_folders(x, remove_root=True)
-    if remove_root and not list(directory.iterdir()):
-        directory.rmdir()
+    try:
+        assert(directory.is_dir())
+        for x in directory.iterdir():
+            if x.is_dir():
+                remove_empty_folders(x, remove_root=True)
+        if remove_root and not list(directory.iterdir()):
+            directory.rmdir()
+    except PermissionError as e:
+        print('Error:', e)
 
 def sheet_api():
     """Shows basic usage of the Sheets API.
@@ -421,6 +444,7 @@ def sheet_api():
             creds.refresh(Request())
         else:
             credentials_file = auth_folder / 'credentials.json'
+            assert credentials_file.exists(), "please put credentials.json file in ./auth/ !"
             flow = InstalledAppFlow.from_client_secrets_file(str(credentials_file), ['https://www.googleapis.com/auth/spreadsheets'])
             creds = flow.run_local_server(port=0)
         # Save the credentials for the next run
