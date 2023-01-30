@@ -12,6 +12,39 @@ Usage:
 oricon.py https://www.oricon.co.jp/news/2236438/
 ```
 
+## `scraper_lineblog.py`
+
+[LINE BLOG](https://www.lineblog.me/) downloader. Download both images and text.
+
+Usage:
+
+CLI:
+
+```
+usage: scraper_lineblog.py [-h] [--output OUTPUT] [--start START] [--until UNTIL] [--threads THREADS] user_id
+
+Download LINE BLOG articles (text and images).
+
+positional arguments:
+  user_id               LINE BLOG user id
+
+options:
+  -h, --help            show this help message and exit
+  --output OUTPUT, -o OUTPUT
+                        folder to save files (default: {CWD}/{user_id})
+  --start START         download starting from this page (inclusive) (default: 1)
+  --until UNTIL         download until this page (inclusive) (default: None (download to the last page)
+  --threads THREADS, --thread THREADS
+                        download threads (default: 20)
+```
+As Python module:
+
+```python
+from scraper_lineblog import main
+
+main('user_id', save_folder='.')
+```
+
 ## `scraper_ameblo_api.py`
 
 [Ameblo](https://ameblo.jp/) (アメーバブログ or アメブロ, Japanese blog service) downloader. Supports images and text.
