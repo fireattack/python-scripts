@@ -131,7 +131,7 @@ def tac(print=True):
 
 def get(url, headers=None, cookies=None, encoding=None, session=None, parser='lxml'):
     if not session:
-        session = requests.Session()
+        session = requests_retry_session()
     r = session.get(url, cookies=cookies, headers=headers)
     if encoding:
         return BeautifulSoup(r.content, parser, from_encoding=encoding)
