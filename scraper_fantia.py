@@ -1,17 +1,18 @@
-from util import download
-import requests
+import concurrent.futures
 import re
 from pathlib import Path
 from urllib.parse import unquote, urljoin
-import concurrent.futures
-from natsort import natsorted
+
+import requests
+# from natsort import natsorted
+from bs4 import BeautifulSoup
+
+from util import download
 
 API_POSTS = "https://fantia.jp/api/v1/posts/{}"
 API_FANCLUB = "https://fantia.jp/api/v1/fanclubs/{}" # Not used for now
 HTML_POSTLIST = "https://fantia.jp/fanclubs/{}/posts?page={}"
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36',
-}
+DEFAULT_UA = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36'
 
 class FantiaDownloader:
 
@@ -24,9 +25,24 @@ class FantiaDownloader:
         self.output = Path(output)
         self.skip_existing = skip_existing
         self.quick_stop = skip_existing and quick_stop
+        self.headers = {
+            'User-Agent': DEFAULT_UA,
+        }
+        self.token = None
+        self.__set_token__()
+
+    def __set_token__(self):
+        r = self.fetch('https://fantia.jp/')
+        soup = BeautifulSoup(r.content)
+        if ele := soup.select_one('meta[name="csrf-token"]'):
+            print(f'Set csrf-token = {ele["content"]}')
+            self.token = ele['content']
+            self.headers['x-csrf-token'] = self.token
+        else:
+            raise Exception('Failed to obtain csrf-token!!')
 
     def fetch(self, url):
-        return requests.get(url, headers=HEADERS, cookies={"_session_id": self.key})
+        return requests.get(url, headers=self.headers, cookies={"_session_id": self.key})
 
     def downloadAll(self):
         if not self.fanclub:
