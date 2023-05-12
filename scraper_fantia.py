@@ -104,7 +104,12 @@ class FantiaDownloader:
             return name.rsplit('.', 1)
 
         print(f'Fetching post {id}...')
-        d = self.fetch(API_POSTS.format(id)).json()
+        while True:
+            d = self.fetch(API_POSTS.format(id)).json()
+            if 'redirect' in d:
+                input(f'Please solve the recaptcha at {urljoin(API_POSTS, d["redirect"])} and then press any key')
+            else:
+                break
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
             if thumb := d['post'].get('thumb', None):
                 img_url = thumb['original']
@@ -125,7 +130,7 @@ class FantiaDownloader:
                             ex.submit(download, img_url, filename=self.output / f'{stem}.{ext}', verbose=1)
                     if 'download_uri' in c:
                         dl_url = urljoin('https://fantia.jp', c['download_uri'])
-                        ex.submit(download, dl_url, filename=self.output / f'{id} {cid} {c["filename"]}', headers=HEADERS, cookies={"_session_id": self.key}, verbose=1)
+                        ex.submit(download, dl_url, filename=self.output / f'{id} {cid} {c["filename"]}', headers=self.headers, cookies={"_session_id": self.key}, verbose=1)
 
 if __name__ == "__main__":
     pass

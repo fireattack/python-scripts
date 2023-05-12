@@ -1,12 +1,13 @@
 import builtins
-import requests
-from bs4 import BeautifulSoup
-import sys
-
-from pathlib import Path
 import json
 import re
+import sys
+from pathlib import Path
 from urllib.parse import unquote
+
+import requests
+from bs4 import BeautifulSoup
+
 
 # Modiifed from https://www.peterbe.com/plog/best-practice-with-retries-with-requests
 def requests_retry_session(
@@ -58,10 +59,52 @@ def parse_to_shortdate(date_str):
         return ""
 
 
+# https://stackoverflow.com/a/13756038/3939155
+def td_format(td_object_or_sec, long_form=True):
+    if isinstance(td_object_or_sec, int) or isinstance(td_object_or_sec, float):
+        seconds = int(td_object_or_sec)
+    else:
+        seconds = int(td_object_or_sec.total_seconds())
+
+    periods = [
+        ('year',        60*60*24*365),
+        ('month',       60*60*24*30),
+        ('day',         60*60*24),
+        ('hour',        60*60),
+        ('minute',      60),
+        ('second',      1)
+    ]
+
+    strings=[]
+    for period_name, period_seconds in periods:
+        if seconds > period_seconds:
+            period_value , seconds = divmod(seconds, period_seconds)
+            if long_form:
+                has_s = 's' if period_value > 1 else ''
+                strings.append(f"{period_value} {period_name}{has_s}")
+            else:
+                strings.append(f"{period_value}{period_name[0:1]}")
+    if long_form:
+        return ", ".join(strings)
+    else:
+        return "".join(strings)
+
+
+def to_jp_time(dt, input_timezone=None):
+    from dateutil import parser
+    from pytz import timezone
+
+    if isinstance(dt, str):
+        dt = parser.parse(dt)
+    if input_timezone:
+        dt = timezone(input_timezone).localize(dt)
+    return dt.astimezone(timezone('asia/tokyo'))
+
+
 def load_cookie(filename):
     import time
-
     from http.cookiejar import MozillaCookieJar
+
     cj = MozillaCookieJar(filename)
     cj.load(ignore_expires=True,ignore_discard=True)
     for cookie in cj:
@@ -69,6 +112,13 @@ def load_cookie(filename):
             cookie.expires = int(time.time()+ 86400)
 
     return cj
+
+
+def print_cmd(cmd, prefix=''):
+    import re
+
+    commands_text_form = [f'"{c}"' if re.search(r'[ ?]', str(c)) else str(c) for c in cmd]
+    print(prefix + ' '.join(commands_text_form))
 
 
 def flatten(x):
@@ -106,9 +156,11 @@ def load_json(filename):
         data = json.load(f)
     return data
 
-def safeify(name):
-    template = {u'\\': u'＼', u'/': u'／', u':': u'：', u'*': u'＊',
-                u'?': u'？', u'"': u'＂', u'<': u'＜', u'>': u'＞', u'|': u'｜','\n':'','\r':'','\t':''}
+def safeify(name, ignore_backslash=False):
+    template = {'\\': '＼', '/': '／', ':': '：', '*': '＊', '?': '？', '"': '＂', '<': '＜', '>': '＞', '|': '｜','\n':'','\r':'','\t':''}
+    if ignore_backslash:
+        template.pop('\\', None)
+
     for illegal in template:
         name = name.replace(illegal, template[illegal])
     return name
@@ -120,8 +172,8 @@ def tic():
     _start_time = time.time()
 
 def tac(print=True):
-    import time
     import builtins
+    import time
     global _start_time
 
     t = time.time() - _start_time
@@ -152,6 +204,7 @@ def ensure_nonexist(f):
 
 def get_current_time(now=None):
     from datetime import datetime
+
     import pytz
 
     tz = pytz.timezone('Asia/Tokyo')
@@ -203,10 +256,6 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
              dupe='skip_same_size', referer=None, headers=None, placeholder=True, prefix='', get_suffix=True, verbose=2):
     if dupe not in ['skip', 'overwrite', 'rename', 'skip_same_size']:
         raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite, rename or skip_same_size).')
-
-    session = requests_retry_session(session=session)
-    if headers:
-        session.headers.update(headers)
 
     def print(s, verbose_level, only=False):
         if (only and verbose == verbose_level) or (not only and verbose >= verbose_level):
@@ -265,6 +314,10 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
     if filename: # If filename is supplied
         f = Path(filename)
         f = f.with_name(safeify(f.name))
+        # Check if file exists for dupe=skip and rename. Other dupe methods will check later.
+        if dupe in ['skip', 'rename']:
+            if not (f := check_dupe(f)):
+                return 'Exists'
     else: # If not, create a f using save_path + web_name for now.
         p = Path(save_path)
         web_name = get_webname(url)
@@ -274,12 +327,15 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
         if not web_name:
             web_name = 'no_web_name'
         f = p / safeify(web_name)
+        # Check if file exists for dupe=skip and rename. Other dupe methods will check later.
+        # Skip this check if filename is likely change by response header (by not having valid suffix) #TODO: check if this is a good practice later.
+        if has_valid_suffix(f) and dupe in ['skip', 'rename']:
+            if not (f := check_dupe(f)):
+                return 'Exists'
 
-    # Check if file exists for dupe=skip and rename. Other dupe methods will check later.
-    # Also don't check if filename is likely change by response header.
-    if dupe in ['skip', 'rename'] and not has_valid_suffix(f):
-        if not (f := check_dupe(f)):
-            return 'Exists'
+    session = requests_retry_session(session=session)
+    if headers:
+        session.headers.update(headers)
 
     f.parent.mkdir(parents=True, exist_ok=True)
 
@@ -306,6 +362,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
             if (get_suffix or not has_valid_suffix(f)) and 'Content-Type' in r.headers: # Also find the file extension
                 def get_ext(mime):
                     from mimetypes import guess_extension
+
                     # don't return .bin
                     if mime == 'application/octet-stream':
                         return ''
@@ -346,9 +403,9 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
             expected_size = int(r.headers.get('Content-length', 0))
             if dupe == 'skip_same_size':
                 if expected_size == 0:
-                    print('[Warning] Cannot get content-length. Omit size check', 2)
+                    print('[Warning] Cannot get Content-Length. Omit size check', 2)
                 elif r.headers.get('content-encoding', None): # Ignore content-length if it's compressed.
-                    print('[Warning] content is compressed. Omit size check.', 2)
+                    print('[Warning] Content is compressed. Omit size check.', 2)
                     expected_size = 0
 
             # Check it again before download starts.
@@ -359,11 +416,19 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
             print(f'Downloading {f.name}...', 1, only=True)
             temp_file = f.with_name(f.name + '.dl')
             temp_file = ensure_nonexist(temp_file)
+            broken_file = f.with_name(f.name + '.broken')
+            broken_file = ensure_nonexist(broken_file)
+
             with temp_file.open('wb') as fio:
                 for chunk in r.iter_content(chunk_size=8192):
                     if chunk:
                         fio.write(chunk)
             downloaded_size = temp_file.stat().st_size
+
+            if expected_size and downloaded_size != expected_size:
+                print(f'[Error] file size does not match (expected: {expected_size}, actual: {downloaded_size}). Please check!', 0)
+                temp_file.rename(broken_file)
+                return r.status_code
             f = check_dupe(f, size=downloaded_size) # Check again. Because some other programs may create the file during downloading
             if not f: # this means skip. Remove what we just downloaded.
                 temp_file.unlink()
@@ -376,7 +441,9 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
         else:
             print(f'[Error] Get HTTP {r.status_code} from {url}.', 0)
             if placeholder:
-                f.with_suffix(f.suffix + '.broken').open('wb').close()
+                broken_file = f.with_name(f.name + '.broken')
+                broken_file = ensure_nonexist(broken_file)
+                broken_file.touch()
             return r.status_code
 
 
@@ -384,6 +451,7 @@ def hello(a, b):
     print(f'hello: {a} and {b}')
 
 def get_files(directory, recursive=False, file_filter=None, path_filter=None):
+    '''filter(s): true means include, false means exclude'''
     directory = Path(directory)
     assert(directory.is_dir())
     # if there is no filter, use scandir generator, since it is so much faster.
@@ -424,9 +492,10 @@ def sheet_api():
     """
 
     import pickle
-    from googleapiclient.discovery import build
-    from google_auth_oauthlib.flow import InstalledAppFlow
+
     from google.auth.transport.requests import Request
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from googleapiclient.discovery import build
 
     print('Initilize Google Sheets API..')
     creds = None
@@ -506,48 +575,47 @@ def array_to_range_text(a, sep=', ', dash='-'):
 def compare_obj(value_old, value, print_prefix='ROOT'):
     from rich import print
     equal = True
+    type_changed = False
 
     if type(value_old) != type(value):
-        print(f'{print_prefix}: warning: data changes type from {type(value_old)} to {type(value)}.')
+        type_changed = True
         equal = False
     elif isinstance(value, dict):
         for key, v in value.items():
             if key not in value_old:
-                print(f'{print_prefix}: found new key \'{key}\':')
-                print(v)
+                print(f'{print_prefix}.{key}: [green]Added:[/green]', v)
             else:
                 v_old = value_old[key]
                 equal &= compare_obj(v_old, v, print_prefix=f'{print_prefix}.{key}')
+        for key, v in value_old.items():
+            if key not in value:
+                print(f'{print_prefix}.{key}: [red]Removed:[/red]', v)
         return equal
     elif isinstance(value, list):
-        if len(value) == 1 and len(value_old) == 1:
-            value = value[0]
-            value_old = value_old[0]
-            equal &= compare_obj(value_old, value, print_prefix=f'{print_prefix}[0]')
-            return equal
-        else:
-            try:
-                equal = sorted(value_old) == sorted(value)
-            except Exception:
-                equal = value_old == value
+        for i in range(min(len(value), len(value_old))):
+            equal &= compare_obj(value_old[i], value[i], print_prefix=f'{print_prefix}[{i}]')
+        if len(value_old) < len(value):
+            for i in range(len(value_old), len(value)):
+                print(f'{print_prefix}[{i}]: [green]Added:[/green]', value[i])
+        elif len(value_old) > len(value):
+            for i in range(len(value), len(value_old)):
+                print(f'{print_prefix}[{i}]: [red]Removed:[/red]',value_old[i])
+        return equal
+
     elif isinstance(value, str):
-        equal = re.sub(r'\s','', value_old) == re.sub(r'\s','', value)
+        equal = re.sub(r'\s+',' ', value_old) == re.sub(r'\s+',' ', value)
     else:
         equal = value_old == value
     if not equal:
-        print(f'{print_prefix}: data does not match with new one:')
-        if isinstance(value, str) or isinstance(value, int):
+        print(f'{print_prefix}:', end='')
+        s = str(value_old) + str(value)
+        if len(s) < 60 and not '\n' in s:
+            print(f' {value_old} [yellow]->[/yellow] {value}')
+            # print(f'[red]Old:[/red] {value_old} [yellow]->[/yellow] [green]New:[/green] {value}')
+        else:
+            print()
             print('[red]Old:', value_old)
             print('[green]New:', value)
-        else:
-            print('[red]======= Old =======')
-            if isinstance(value, list):
-                print('Items count: ', len(value_old))
-            print(value_old)
-            print('[green]======= New =======')
-            if isinstance(value, list):
-                print('Items count: ', len(value))
-            print(value)
     return equal
 
 
@@ -559,13 +627,16 @@ if __name__ == "__main__":
         print('Yay!')
 
 class Table():
-    def __init__(self, rows=None, headers=None, max_width=20) -> None:
+    def __init__(self, rows=None, headers=None, max_width=100) -> None:
         if rows and not headers:
             self.headers = rows[0]
             self.data = rows[1:]
         elif headers:
             self.headers = headers
-            self.data = []
+            if rows:
+                self.data = rows
+            else:
+                self.data = []
         else:
             raise Exception('No header or data given!')
         self.max_width = max_width
@@ -606,33 +677,59 @@ class Table():
             col_idx = self.headers.index(key)
             d[col_idx] = value
         self.data.append(d)
-    def print(self):
+    def print(self, formats=None, custom_print=None):
         import wcwidth
-        def print_row(row, widths):
-            print(''.join(format_str(row[idx], widths[idx]) + ' ' for idx in range(len(row))))
-        def max_width(idx):
-            maxw = 0
-            for c in str(self.headers[idx]):
-                maxw += wcwidth.wcwidth(c)
 
+        def fmt(value, str_format):
+            try:
+                return str_format.format(value)
+            except Exception:
+                return value
+
+        def calc_width(col_format, idx):
+            maxw = sum(wcwidth.wcwidth(c) for c in str(self.headers[idx]))
             for row in self.data:
-                w = 0
                 if idx > len(row) - 1:
                     continue
-                for c in str(row[idx]):
-                    w += wcwidth.wcwidth(c)
+                w =sum(wcwidth.wcwidth(c) for c in fmt(row[idx], col_format['str_format']))
                 if w > maxw:
                     maxw = w
-            maxw = min(maxw, self.max_width)
-            return maxw
+            maxw = min(maxw, col_format['max_width'])
+            col_format['width'] = maxw
 
-        widths = dict()
+        def print_row(row, header_mode=False, custom_print=custom_print):
+            parts = []
+            for idx in range(len(row)):
+                col_format = col_formats[idx]
+                # override str format back to nothing for headers
+                str_format = "{}" if header_mode else col_format['str_format']
+                s = format_str(fmt(row[idx], str_format), width=col_format['width'], align=col_format['align'])
+                parts.append(s)
+            line = s = '  '.join(parts)
+            if custom_print:
+                custom_print(line)
+            else:
+                print(line)
+
+        col_formats = dict()
         for idx in range(len(self.headers)):
-            widths[idx] = max_width(idx)
+            col_format = {
+                "align": "left",
+                "str_format": "{}",
+                "max_width": self.max_width
+            }
+            if formats:
+                if idx in formats:
+                    col_format.update(formats[idx])
+                elif self.headers[idx] in formats:
+                    col_format.update(formats[self.headers[idx]])
+            if not 'width' in col_format:
+                calc_width(col_format, idx)
+            col_formats[idx] = col_format
 
-        print_row(self.headers, widths)
+        print_row(self.headers, header_mode=True)
         for row in self.data:
-            print_row(row, widths)
+            print_row(row)
 
     def save(self, f):
         s = ''
