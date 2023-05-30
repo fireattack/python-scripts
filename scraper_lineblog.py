@@ -17,7 +17,6 @@ def safeify(name):
 
 
 def dump_json(mydict, filename):
-
     filename = Path(filename)
     if filename.suffix.lower() != '.json':
         filename = filename.with_suffix('.json')
@@ -62,7 +61,7 @@ def parse_list(user_id, start, until, threads=20):
     return results
 
 
-def parse_item(soup, save_folder):
+def parse_item(soup, save_folder, verbose=False):
     content = soup.text
     content_html = str(soup)
     url = soup.select_one('h1 > a')['href']
@@ -88,29 +87,41 @@ def parse_item(soup, save_folder):
             img_name = ele['alt'].rsplit('.', 1)[0]  # remove extension, since we will get it from header later.
         img_name = safeify(f'{filename_prefix}_{idx} {img_name}'.strip())
 
-        with requests_retry_session().get(img_url, stream=True) as r:
-            suffix = '.' + r.headers['content-type'].split('/')[-1].replace('jpeg', 'jpg')
-            expected_filesize = int(r.headers['content-length'])
-            f = save_folder / (img_name + suffix)
-            f_temp = f.with_name(f.name + '.dl')
-            if f.exists() and expected_filesize == f.stat().st_size:
-                print(f'[W] {f.name} already exists and is identical. Skip.')
-                if f_temp.exists():
-                    # if f already exists and is good, remove potential temp file from previous download(s).
-                    f_temp.unlink()
-            else:
-                if f.exists() and expected_filesize != f.stat().st_size:
-                    print(f'[W] {f.name} already exists but filesize is a mismatch. Re-download and overwrite.')
-                print(f'Downloading {f.name} from {img_url}...')
-                with f_temp.open('wb') as fio:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        if chunk:
-                            fio.write(chunk)
-                assert expected_filesize == f_temp.stat().st_size, f"{f.name}: file download failed!"
-                # remove old, broken file.
-                if f.exists():
-                    f.unlink()
-                f_temp.rename(f)
+        tries = 0
+        while tries < 5:
+            try:
+                with requests_retry_session().get(img_url, stream=True) as r:
+                    suffix = '.' + r.headers['content-type'].split('/')[-1].replace('jpeg', 'jpg')
+                    expected_filesize = int(r.headers['content-length'])
+                    f = save_folder / (img_name + suffix)
+                    f_temp = f.with_name(f.name + '.dl')
+                    if f.exists() and expected_filesize == f.stat().st_size:
+                        verbose and print(f'[I] {f.name} already exists and is identical. Skip.')
+                        if f_temp.exists():
+                            # if f already exists and is good, remove any potential temp file from previous download(s).
+                            f_temp.unlink()
+                        break
+                    else:
+                        if f.exists() and expected_filesize != f.stat().st_size:
+                            print(f'[W] {f.name} already exists but filesize is a mismatch. Re-download and overwrite.')
+                        verbose and print(f'[I] Downloading {f.name} from {img_url}...')
+                        with f_temp.open('wb') as fio:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                if chunk:
+                                    fio.write(chunk)
+                        if f_temp.stat().st_size == expected_filesize:
+                            # remove old, broken file.
+                            if f.exists():
+                                f.unlink()
+                            f_temp.rename(f)
+                            break
+                        else:
+                            print(f'[E] {f.name}: file download failed: filesize does not match. Retry...')
+                            f_temp.unlink()
+            except Exception as e:
+                print(f'[E] {img_name}: file download failed: {e}. Retry...')
+            tries += 1
+
         img_urls.append((img_url, f.name))
 
     (save_folder / 'text').mkdir(exist_ok=True)
@@ -121,7 +132,7 @@ def parse_item(soup, save_folder):
     dump_json(data, (save_folder / 'metadata' / f'{filename_prefix}.json'))
 
 
-def main(user_id, save_folder, start=1, until=None, threads=20):
+def main(user_id, save_folder, start=1, until=None, threads=20, verbose=False):
     save_folder = Path(save_folder)
 
     if until is None:
@@ -138,7 +149,7 @@ def main(user_id, save_folder, start=1, until=None, threads=20):
         save_folder.mkdir(exist_ok=True, parents=True)
         with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as main_e:
             for item in items:
-                main_e.submit(parse_item, item, save_folder)
+                main_e.submit(parse_item, item, save_folder, verbose=verbose)
     else:
         print('[W] find no articles. Please check parameters.')
 
@@ -151,7 +162,8 @@ if __name__ == '__main__':
     parser.add_argument('--start', default=1, type=int, help='download starting from this page (inclusive) (default: 1)')
     parser.add_argument('--until', type=int, help='download until this page (inclusive) (default: None (download to the last page)')
     parser.add_argument('--threads', '--thread', type=int, help='download threads (default: 20)')
+    parser.add_argument('--verbose', '-v', action='store_true', help='verbose mode')
 
     args = parser.parse_args()
     save_folder = args.output if args.output else args.user_id
-    main(args.user_id, save_folder=save_folder, start=args.start, until=args.until, threads=args.threads)
+    main(args.user_id, save_folder=save_folder, start=args.start, until=args.until, threads=args.threads, verbose=args.verbose)

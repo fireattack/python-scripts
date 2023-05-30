@@ -33,7 +33,7 @@ class FantiaDownloader:
 
     def __set_token__(self):
         r = self.fetch('https://fantia.jp/')
-        soup = BeautifulSoup(r.content)
+        soup = BeautifulSoup(r.content, 'html.parser')
         if ele := soup.select_one('meta[name="csrf-token"]'):
             print(f'Set csrf-token = {ele["content"]}')
             self.token = ele['content']
