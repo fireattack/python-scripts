@@ -379,13 +379,13 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                 if f.suffix.lower() == header_suffix:
                     pass
                 # if header_suffix is bad, don't do anything
-                elif header_suffix == '' or '-' in header_suffix:
+                elif header_suffix == '' or '-' in header_suffix or '+' in header_suffix:
                     pass
                 # don't replace jpeg to jpg or vice versa
                 elif header_suffix in ['.jpg', '.jpeg'] and f.suffix.lower() in ['.jpg', '.jpeg']:
                     pass
-                # don't replace m4a to mp4 or vice versa
-                elif header_suffix in ['.mp4', '.m4a'] and f.suffix.lower() in ['.m4a', '.mp4']:
+                # don't replace m4a/m4v to mp4 or vice versa
+                elif header_suffix in ['.mp4', '.m4a', '.m4v'] and f.suffix.lower() in ['.m4a', '.mp4', '.m4v']:
                     pass
                 # likely dynamic content, use header suffix instead
                 elif f.suffix.lower() in ['.php', '']:

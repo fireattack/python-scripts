@@ -72,6 +72,7 @@ class FantiaDownloader:
                     page += 1
                 else:
                     return results
+
         results = fetchAll()
         results = list(dict.fromkeys(results))
         print(f"Get {len(results)} ID(s) from list.")
@@ -99,6 +100,8 @@ class FantiaDownloader:
         return re.findall(r'\/posts\/(?P<id>[0-9]{1,8})"', html)
 
     def getPostPhotos(self, id):
+        import webbrowser
+
         def getWebName(url):
             name = unquote(url.split('?')[0].split('/')[-1])
             return name.rsplit('.', 1)
@@ -107,7 +110,11 @@ class FantiaDownloader:
         while True:
             d = self.fetch(API_POSTS.format(id)).json()
             if 'redirect' in d:
-                input(f'Please solve the recaptcha at {urljoin(API_POSTS, d["redirect"])} and then press any key')
+                recaptcha_url = urljoin(API_POSTS, d["redirect"])
+                # open recaptcha_url in browser
+                webbrowser.open(recaptcha_url)
+
+                input(f'Please solve the recaptcha at {recaptcha_url} and then press any key')
             else:
                 break
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
