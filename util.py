@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 def requests_retry_session(
     retries=5,
     backoff_factor=0.2,
-    status_forcelist=None, # (500, 502, 504)
+    status_forcelist=(500, 502, 503, 504),
     session=None,
 ):
     import requests
@@ -253,7 +253,9 @@ def batch_rename(renamings):
 
 
 def download(url, filename=None, save_path='.', cookies=None, session=None, dry_run=False,
-             dupe='skip_same_size', referer=None, headers=None, placeholder=True, prefix='', get_suffix=True, verbose=2):
+             dupe='skip_same_size', referer=None, headers=None, placeholder=True, prefix='',
+             get_suffix=True, verbose=2, retry_failed=True):
+
     if dupe not in ['skip', 'overwrite', 'rename', 'skip_same_size']:
         raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite, rename or skip_same_size).')
 
@@ -271,6 +273,54 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
         if len(f.suffix.lower()) > 5 or ' ' in f.suffix.lower():
             return False
         return True
+
+    def replace_suffix(f, content_type):
+        from mimetypes import guess_extension
+
+        header_suffix = ''
+        mime = content_type.split(';')[0]
+        # manually set suffix for some common types
+        if mime == 'audio/mp4' or mime == 'audio/x-m4a':
+            header_suffix = '.m4a'
+        # if bin, just use the original suffix
+        if mime == 'application/octet-stream':
+            header_suffix = ''
+        # only use guessed extension if it's valid (and not bin)
+        guess = guess_extension(mime)
+        if guess is not None:
+            header_suffix = guess
+
+        # last resort NOTE: this does not work half the time, abandon it
+        # header_suffix = '.' + mime.split('/')[-1].lower()
+
+        # replace logic
+        # if they're the same, we don't need to do anything
+        if f.suffix.lower() == header_suffix:
+            return f
+        # if header_suffix is a bad one, don't do anything
+        if header_suffix == '' or '-' in header_suffix or '+' in header_suffix:
+            return f
+        # don't replace equivalent extensions
+        ext_alias_groups = [
+            ['.mp4', '.m4a', '.m4v'],
+            ['.jpg', '.jpeg']
+        ]
+        for aliases in ext_alias_groups:
+            if f.suffix.lower() in aliases and header_suffix in aliases:
+                return f
+        # likely dynamic content, use header suffix instead (silently)
+        if f.suffix.lower() in ['.php', '']:
+            return f.with_suffix(header_suffix)
+
+        # this is to prevent that when filename has dot in it, it would cause Path obj to consider part of stem is the suffix.
+        # so we only replace the suffix that is <= 3 chars.
+        # Not ideal, but should be good enough.
+        if has_valid_suffix(f):
+            print(f'[Warning] File suffix is different from the one in Content-Type header! {f.suffix.lower()} -> {header_suffix}', 1)
+            return f.with_suffix(header_suffix)
+        # f has a weird suffix. We assume it's part of the name stem, so we just append the header suffix (silently).
+        return f.with_name(f.name + header_suffix)
+
 
     def check_dupe(f, dupe=dupe, size=0):
         if not f.exists():
@@ -339,112 +389,94 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
 
     f.parent.mkdir(parents=True, exist_ok=True)
 
-    with session.get(url, headers={"referer": referer}, cookies=cookies, stream=True) as r:
-        if r.status_code == 200:
-            if not filename: # Try to find filename using the response again, if not specified
-                if r.url != url: # Get filename again from URL for potential 302/301
-                    web_name = get_webname(r.url)
-                    if prefix:
-                        web_name = f'{prefix} ' + web_name
-                    f = p / safeify(web_name)
-                if "Content-Disposition" in r.headers: # Get filename from the header
-                    from cgi import parse_header
-                    _, params = parse_header(r.headers["Content-Disposition"])
-                    header_name = ''
-                    if 'filename*' in params:
-                        header_name = unquote(params['filename*'].lstrip("UTF-8''"))
-                    elif 'filename' in params:
-                        header_name = params['filename']
-                    if header_name:
-                        if prefix:
-                            header_name = f'{prefix} ' + header_name
-                        f = p / safeify(header_name)
-            if (get_suffix or not has_valid_suffix(f)) and 'Content-Type' in r.headers: # Also find the file extension
-                def get_ext(mime):
-                    from mimetypes import guess_extension
-
-                    # don't return .bin
-                    if mime == 'application/octet-stream':
-                        return ''
-                    # manually replace some weird ones
-                    if mime == 'audio/mp4' or mime == 'audio/x-m4a':
-                        return '.m4a'
-                    guess = guess_extension(mime)
-                    if guess is not None:
-                        return guess
-                    # last resort
-                    return '.' + mime.split('/')[-1].lower()
-                header_suffix = get_ext(r.headers['Content-Type'].split(';')[0])
-                # if they're the same, we don't need to do anything
-                if f.suffix.lower() == header_suffix:
-                    pass
-                # if header_suffix is bad, don't do anything
-                elif header_suffix == '' or '-' in header_suffix or '+' in header_suffix:
-                    pass
-                # don't replace jpeg to jpg or vice versa
-                elif header_suffix in ['.jpg', '.jpeg'] and f.suffix.lower() in ['.jpg', '.jpeg']:
-                    pass
-                # don't replace m4a/m4v to mp4 or vice versa
-                elif header_suffix in ['.mp4', '.m4a', '.m4v'] and f.suffix.lower() in ['.m4a', '.mp4', '.m4v']:
-                    pass
-                # likely dynamic content, use header suffix instead
-                elif f.suffix.lower() in ['.php', '']:
-                    f = f.with_suffix(header_suffix)
-                # this is to prevent the filename has dot in it, which causes Path to think part of stem is suffix.
-                # so we only replace the suffix that is <= 3 chars.
-                # Not ideal, but should be good enough.
-                elif has_valid_suffix(f):
-                    print(f'[Warning] File suffix is different from the one in Content-Type header! {f.suffix.lower()} -> {header_suffix}', 1)
-                    f = f.with_suffix(header_suffix)
-                # f has a weird suffix. We assume it's part of the name stem, so we just append the header suffix.
-                else:
-                    f = f.with_name(f.name + header_suffix)
-
-            expected_size = int(r.headers.get('Content-length', 0))
-            if dupe == 'skip_same_size':
-                if expected_size == 0:
-                    print('[Warning] Cannot get Content-Length. Omit size check', 2)
-                elif r.headers.get('content-encoding', None): # Ignore content-length if it's compressed.
-                    print('[Warning] Content is compressed. Omit size check.', 2)
-                    expected_size = 0
-
-            # Check it again before download starts.
-            # Note: if dupe=overwrite, it will check (and print) twice, before and after downloading. This is by design.
-            if not (f := check_dupe(f, size=expected_size)):
-                return 'Exists'
-            print(f'Downloading {f.name} from {url}...', 2)
-            print(f'Downloading {f.name}...', 1, only=True)
-            temp_file = f.with_name(f.name + '.dl')
-            temp_file = ensure_nonexist(temp_file)
+    r = session.get(url, headers={"referer": referer}, cookies=cookies, stream=True)
+    if not r.status_code == 200:
+        r.close()
+        print(f'[Error] Get HTTP {r.status_code} from {url}.', 0)
+        if placeholder:
             broken_file = f.with_name(f.name + '.broken')
             broken_file = ensure_nonexist(broken_file)
+            broken_file.touch()
+        return r.status_code
 
-            with temp_file.open('wb') as fio:
-                for chunk in r.iter_content(chunk_size=8192):
-                    if chunk:
-                        fio.write(chunk)
+    if not filename: # Try to find filename using the response again, if not specified
+        if r.url != url: # Get filename again from URL for potential 302/301
+            web_name = get_webname(r.url)
+            if prefix:
+                web_name = f'{prefix} ' + web_name
+            f = p / safeify(web_name)
+        if "Content-Disposition" in r.headers: # Get filename from the header
+            from cgi import parse_header
+            _, params = parse_header(r.headers["Content-Disposition"])
+            header_name = ''
+            if 'filename*' in params:
+                header_name = unquote(params['filename*'].lstrip("UTF-8''"))
+            elif 'filename' in params:
+                header_name = params['filename']
+            if header_name:
+                if prefix:
+                    header_name = f'{prefix} ' + header_name
+                f = p / safeify(header_name)
+
+    if (get_suffix or not has_valid_suffix(f)) and 'Content-Type' in r.headers: # Also find the file extension
+        f = replace_suffix(f, r.headers['Content-Type'])
+
+    expected_size = int(r.headers.get('Content-length', 0))
+    if dupe == 'skip_same_size':
+        if expected_size == 0:
+            print('[Warning] Cannot get Content-Length. Omit size check', 2)
+        elif r.headers.get('content-encoding', None): # Ignore content-length if it's compressed.
+            print('[Warning] Content is compressed. Omit size check.', 2)
+            expected_size = 0
+
+    # Check it again before download starts.
+    # Note: if dupe=overwrite, it will check (and print) twice, before and after downloading. This is by design.
+    if not (f := check_dupe(f, size=expected_size)):
+        return 'Exists'
+    print(f'Downloading {f.name} from {url}...', 2)
+    print(f'Downloading {f.name}...', 1, only=True)
+    temp_file = f.with_name(f.name + '.dl')
+    temp_file = ensure_nonexist(temp_file)
+    broken_file = f.with_name(f.name + '.broken')
+    broken_file = ensure_nonexist(broken_file)
+
+    def actually_download(file, response):
+        with file.open('wb') as fio:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    fio.write(chunk)
+
+    actually_download(temp_file, r)
+    r.close()
+
+    downloaded_size = temp_file.stat().st_size
+    if expected_size and downloaded_size != expected_size and retry_failed:
+        retries = 1
+        while retries < 5:
+            print(f'[Warning] file size does not match (expected: {expected_size}, actual: {downloaded_size}). Retry {retries}', 1)
+            with session.get(url, headers={"referer": referer}, cookies=cookies) as r2:
+                actually_download(temp_file, r2)
             downloaded_size = temp_file.stat().st_size
+            if downloaded_size == expected_size:
+                break
+            retries += 1
 
-            if expected_size and downloaded_size != expected_size:
-                print(f'[Error] file size does not match (expected: {expected_size}, actual: {downloaded_size}). Please check!', 0)
-                temp_file.rename(broken_file)
-                return r.status_code
-            f = check_dupe(f, size=downloaded_size) # Check again. Because some other programs may create the file during downloading
-            if not f: # this means skip. Remove what we just downloaded.
-                temp_file.unlink()
-                return 'Exists'
-            if f.exists(): # this means overwrite. So remove before rename.
-                f.unlink()
-            # In other case, either f has been renamed or no conflict. So just rename.
-            temp_file.rename(f)
-            return r.status_code
-        else:
-            print(f'[Error] Get HTTP {r.status_code} from {url}.', 0)
-            if placeholder:
-                broken_file = f.with_name(f.name + '.broken')
-                broken_file = ensure_nonexist(broken_file)
-                broken_file.touch()
-            return r.status_code
+    if expected_size and downloaded_size != expected_size:
+        print(f'[Error] file size does not match (expected: {expected_size}, actual: {downloaded_size}). Please check!', 0)
+        temp_file.rename(broken_file)
+        return r.status_code
+
+    # post-processing
+    f = check_dupe(f, size=downloaded_size) # Check again. Because some other programs may create the file during downloading
+    if not f: # this means skip. Remove what we just downloaded.
+        temp_file.unlink()
+        return 'Exists'
+    if f.exists(): # this means overwrite. So remove before rename.
+        f.unlink()
+    # In other case, either f has been renamed or no conflict. So just rename.
+    temp_file.rename(f)
+    return r.status_code
+
 
 
 def hello(a, b):
