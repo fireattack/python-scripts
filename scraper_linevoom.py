@@ -23,10 +23,9 @@ def load_json(filename):
         data = json.load(f)
     return data
 
-# Modified from https://www.peterbe.com/plog/best-practice-with-retries-with-requests
-
 
 def requests_retry_session(retries=5, backoff_factor=0.2):
+    # Modified from https://www.peterbe.com/plog/best-practice-with-retries-with-requests
     session = requests.Session()
     retry = Retry(
         total=retries,
@@ -49,9 +48,12 @@ def parse_list(user_id):
     results = []
     post_id = None
     updated_time = None
+    url = "https://linevoom.line.me/api/socialprofile/getPosts"
+    headers = {
+        'referer': f'https://linevoom.line.me/user/{user_id}',
+    }
 
     while True:
-        url = "https://linevoom.line.me/api/socialprofile/getPosts"
         params = {
             'homeId': user_id,
             'withSocialHomeInfo': 'false',
@@ -59,12 +61,7 @@ def parse_list(user_id):
             'postId': post_id,
             'updatedTime': updated_time,
         }
-
-        headers = {
-            'referer': f'https://linevoom.line.me/user/{user_id}',
-        }
-
-        r = requests_retry_session().request("GET", url, headers=headers, params=params)
+        r = requests_retry_session().get(url, headers=headers, params=params)
         data = r.json()
         if not 'posts' in data['data']:
             break
@@ -72,7 +69,6 @@ def parse_list(user_id):
         print(f'Find {len(posts)} posts: from {posts[0]["postInfo"]["postId"]} to {posts[-1]["postInfo"]["postId"]}')
         for post in posts:
             results.append(post)
-
         post_id = posts[-1]['postInfo']['postId']
         updated_time = posts[-1]['postInfo']['updatedTime']
 
@@ -89,7 +85,7 @@ def parse_item(post, save_folder, verbose=False):
         img_url = f'https://obs.line-scdn.net/{media["resourceId"]}'
         img_name = f'{date} {post_id}_{idx}'
         tries = 0
-        while tries < 5:
+        while tries <= 5:
             try:
                 with requests_retry_session().get(img_url, stream=True) as r:
                     suffix = '.' + r.headers['content-type'].split('/')[-1].replace('jpeg', 'jpg')
@@ -125,10 +121,11 @@ def parse_item(post, save_folder, verbose=False):
             except Exception as e:
                 print(f'[E] {img_name}: file download failed: {e}. Retry...')
             tries += 1
+        else:
+            print(f'[E] {img_name}: file download failed after {tries} tries. Skip.')
 
 
 def main(user_id, save_folder, threads, verbose):
-
     save_folder = Path(save_folder)
     save_folder.mkdir(parents=True, exist_ok=True)
 
