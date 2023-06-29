@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 def requests_retry_session(
     retries=5,
     backoff_factor=0.2,
-    status_forcelist=(500, 502, 503, 504),
+    status_forcelist=(502, 503, 504),
     session=None,
 ):
     import requests
@@ -378,7 +378,8 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
             web_name = 'no_web_name'
         f = p / safeify(web_name)
         # Check if file exists for dupe=skip and rename. Other dupe methods will check later.
-        # Skip this check if filename is likely change by response header (by not having valid suffix) #TODO: check if this is a good practice later.
+        # Skip this check if filename is likely change by response header (by not having valid suffix)
+        # #TODO: check if this is a good practice later.
         if has_valid_suffix(f) and dupe in ['skip', 'rename']:
             if not (f := check_dupe(f)):
                 return 'Exists'
@@ -450,6 +451,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
     r.close()
 
     downloaded_size = temp_file.stat().st_size
+    #TODO: maybe we should just retry the whole thing. And capture any exceptions too.
     if expected_size and downloaded_size != expected_size and retry_failed:
         retries = 1
         while retries < 5:
