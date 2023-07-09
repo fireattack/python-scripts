@@ -157,6 +157,8 @@ def load_json(filename):
     return data
 
 def safeify(name, ignore_backslash=False):
+    assert isinstance(name, str), f'Name must be a string, not {type(name)}'
+
     template = {'\\': '＼', '/': '／', ':': '：', '*': '＊', '?': '？', '"': '＂', '<': '＜', '>': '＞', '|': '｜','\n':'','\r':'','\t':''}
     if ignore_backslash:
         template.pop('\\', None)
@@ -423,12 +425,11 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
         f = replace_suffix(f, r.headers['Content-Type'])
 
     expected_size = int(r.headers.get('Content-length', 0))
-    if dupe == 'skip_same_size':
-        if expected_size == 0:
-            print('[Warning] Cannot get Content-Length. Omit size check', 2)
-        elif r.headers.get('content-encoding', None): # Ignore content-length if it's compressed.
-            print('[Warning] Content is compressed. Omit size check.', 2)
-            expected_size = 0
+    if expected_size == 0:
+        print('[Warning] Cannot get Content-Length. Omit size check', 2)
+    elif r.headers.get('content-encoding', None): # Ignore content-length if it's compressed.
+        print('[Warning] Content is compressed. Omit size check.', 2)
+        expected_size = 0
 
     # Check it again before download starts.
     # Note: if dupe=overwrite, it will check (and print) twice, before and after downloading. This is by design.
