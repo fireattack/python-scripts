@@ -150,9 +150,9 @@ def dump_json(mydict, filename):
     with filename.open('w', encoding='utf-8') as f:
         json.dump(mydict, f, ensure_ascii=False, indent=2)
 
-def load_json(filename):
+def load_json(filename, encoding='utf-8'):
     filename = Path(filename)
-    with filename.open('r', encoding='utf-8') as f:
+    with filename.open('r', encoding=encoding) as f:
         data = json.load(f)
     return data
 
@@ -281,19 +281,27 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
 
         header_suffix = ''
         mime = content_type.split(';')[0]
-        # manually set suffix for some common types
-        if mime == 'audio/mp4' or mime == 'audio/x-m4a':
-            header_suffix = '.m4a'
-        # if bin, just use the original suffix
-        if mime == 'application/octet-stream':
+        guess = guess_extension(mime, strict=False)
+        suffix_from_mime = mime.split('/')[-1].lower()
+
+        # manually set suffix for some common types that isn't covered by guess_extension
+        maps = {
+            'audio/mp4': '.m4a',
+            'audio/x-m4a': '.m4a',
+            'image/webp': '.webp',
+        }
+
+        if mime in maps:
+            header_suffix = maps[mime]
+        # if 'application/octet-stream', just use the original suffix (guess_extension gives .bin)
+        elif mime == 'application/octet-stream':
             header_suffix = ''
         # only use guessed extension if it's valid (and not bin)
-        guess = guess_extension(mime)
-        if guess is not None:
+        elif guess is not None:
             header_suffix = guess
-
-        # last resort NOTE: this does not work half the time, abandon it
-        # header_suffix = '.' + mime.split('/')[-1].lower()
+        # last resort. NOTE: this does not work half the time, maybe just abandon it...
+        elif re.search(r'^[a-zA-Z0-9]+$', suffix_from_mime):
+            header_suffix = '.' + suffix_from_mime
 
         # replace logic
         # if they're the same, we don't need to do anything
@@ -304,7 +312,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
             return f
         # don't replace equivalent extensions
         ext_alias_groups = [
-            ['.mp4', '.m4a', '.m4v'],
+            ['.mp4', '.m4a', '.m4v', '.m4s'],
             ['.jpg', '.jpeg']
         ]
         for aliases in ext_alias_groups:
@@ -315,7 +323,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
             return f.with_suffix(header_suffix)
 
         # this is to prevent that when filename has dot in it, it would cause Path obj to consider part of stem is the suffix.
-        # so we only replace the suffix that is <= 3 chars.
+        # so we only replace the suffix that is "valid" (<= 3 chars etc.) but wrong.
         # Not ideal, but should be good enough.
         if has_valid_suffix(f):
             print(f'[Warning] File suffix is different from the one in Content-Type header! {f.suffix.lower()} -> {header_suffix}', 1)
