@@ -4,9 +4,20 @@ import re
 import sys
 from pathlib import Path
 from urllib.parse import unquote
+import time
 
 import requests
 from bs4 import BeautifulSoup
+
+
+def timeme(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        print(f"{func.__name__} executed in {end_time - start_time:.02f} seconds")
+        return result
+    return wrapper
 
 
 # Modiifed from https://www.peterbe.com/plog/best-practice-with-retries-with-requests
