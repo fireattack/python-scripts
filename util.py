@@ -117,13 +117,12 @@ def load_cookie(filename):
     from http.cookiejar import MozillaCookieJar
 
     cj = MozillaCookieJar(filename)
-    cj.load(ignore_expires=True,ignore_discard=True)
+    cj.load(ignore_expires=True, ignore_discard=True)
     for cookie in cj:
         if cookie.expires == 0:
             cookie.expires = int(time.time()+ 86400)
 
     return cj
-
 
 def print_cmd(cmd, prefix=''):
     import re
@@ -725,9 +724,10 @@ class Table():
         else:
             return []
     def append(self, new_data):
-        d = [None] * len(self.headers)
+        d = [''] * len(self.headers)
         for key, value in new_data.items():
-            assert key in self.headers
+            if not key in self.headers: # silently ignore keys that are not in headers
+                continue
             col_idx = self.headers.index(key)
             d[col_idx] = value
         self.data.append(d)

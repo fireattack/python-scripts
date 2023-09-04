@@ -121,6 +121,41 @@ e = RadikoExtractor(url, save_dir='/output')
 e.parse()
 ```
 
+## `nico.py`
+
+Nico Timeshift downloader. Download both video and comments.
+Also can download thumbnail from normal video. Downloading for normal video isn't supported (yet).
+
+Install these first:
+
+```
+pip install browser-cookie3 websocket-client rich python-dateutil pytz requests beautifulsoup4 lxml
+node install minyami -g
+```
+
+CLI:
+
+```
+usage: nico.py [-h] [--info] [--verbose] [--thumb] [--cookies COOKIES] [--comments {yes,no,only}] url
+
+positional arguments:
+  url                   URL or ID of nicovideo webpage
+
+options:
+  -h, --help            show this help message and exit
+  --info, -i            Print info only.
+  --verbose             Print more info.
+  --thumb               Download thumbnail only. Only works for video type (not live).
+  --cookies COOKIES, -c COOKIES
+                        Cookie source. [Default: chrome]
+                        Provide either:
+                          - A browser name to fetch from;
+                          - The value of "user_session";
+                          - A Netscape-style cookie file.
+  --comments {yes,no,only}, -d {yes,no,only}
+                        Control if comments (danmaku) are downloaded. [Default: yes]
+```
+
 ## `util.py`
 
 Some utility functions mainly for myself. Read the code to get the idea.
