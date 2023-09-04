@@ -130,7 +130,7 @@ Install these first:
 
 ```
 pip install browser-cookie3 websocket-client rich python-dateutil pytz requests beautifulsoup4 lxml
-node install minyami -g
+npm i minyami -g
 ```
 
 CLI:
