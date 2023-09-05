@@ -9,3 +9,4 @@ key.txt
 _test*.py
 
 *.txt
+*.json

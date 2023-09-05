@@ -515,7 +515,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
     # pip install requests
 
     if dupe not in ['skip', 'overwrite', 'rename', 'skip_same_size']:
-        raise ValueError('[Error] Invalid dupe method: {dupe} (must be either skip, overwrite, rename or skip_same_size).')
+        raise ValueError(f'[Error] Invalid dupe method: {dupe} (must be either skip, overwrite, rename or skip_same_size).')
 
     def print(s, verbose_level, only=False):
         if (only and verbose == verbose_level) or (not only and verbose >= verbose_level):
@@ -642,7 +642,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
         f = p / safeify(web_name)
         # Check if file exists for dupe=skip and rename. Other dupe methods will check later.
         # Skip this check if filename is likely change by response header (by not having valid suffix)
-        # #TODO: check if this is a good practice later.
+        # TODO: check if this is a good practice later.
         if has_valid_suffix(f) and dupe in ['skip', 'rename']:
             if not (f := check_dupe(f)):
                 return 'Exists'

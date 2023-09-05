@@ -36,8 +36,8 @@ class NicoDownloader():
                     print('Find user_session in cookie:', cookie.value)
                     break
             else:
-                print(f'Cannot find user_session in cookie.')
-                exit(1)
+                print(f'WARN: cannot find user_session in cookie. You\'re probably not logged in.')
+                # exit(1) # make it non-fatal
 
         if cookies.lower() in ['chrome', 'firefox', 'edge']:
             print(f'Fetching cookies from browser {cookies}...')
@@ -56,7 +56,7 @@ class NicoDownloader():
         elif cookies.startswith('user_session_'):
             cookies = {'user_session': cookies}
         else:
-            print('Invalid cookie source. Please provide a browser name, a cookie value, or a Netscape-style cookie file.')
+            print('ERROR: Invalid cookie source. Please provide a browser name, a cookie value, or a Netscape-style cookie file.')
             exit(1)
 
         self.session = requests_retry_session()
@@ -126,9 +126,8 @@ class NicoDownloader():
         print(f'Total unique comments: {len(chats_all)}. Save to {self.filename}.json.')
         dump_json(chats_all, f'{self.filename}.json')
 
-    def download_timeshift(self, info_only=False, comments='yes', verbose=False):
+    def download_timeshift(self, info_only=False, comments='yes', verbose=False, dump=False):
         live_data = self.fetch_page(self.url)
-
         title = live_data['program']['title']
         end_time_epoch = live_data["program"]["endTime"]
         begin_time_dt = to_jp_time(datetime.fromtimestamp(live_data['program']['beginTime']))
@@ -138,23 +137,35 @@ class NicoDownloader():
         t = Table(show_header=False, show_lines=True)
         t.add_column('Desc.', style='bold green')
         t.add_column('Value')
+        t.add_row('Video ID', self.video_id)
         t.add_row('Title', title)
         t.add_row('Start time', get_current_time(begin_time_dt)["jst"]["str_pretty"] + " (JST)")
         t.add_row('Max quality', max_quality)
         t.add_row('Filename', self.filename)
         print(t)
 
+        if dump:
+            dump_json(live_data, f'{self.filename}.info.json')
         if info_only:
             return
+
+        # check video availability
         if not live_data['site']['relive'].get('webSocketUrl', None):
-            if input('Inactive timeshift. Do you want to reserve/activate it? Y/[N]').lower() == 'y':
+            if 'timeshiftTicketExpired' in live_data['userProgramWatch']['rejectedReasons']:
+                print('ERROR: Timeshift ticket expired.')
+                return
+            # other reasons I have encountered so far:
+            # 'notHaveTimeshiftTicket': not reserved yet
+            # 'notUseTimeshiftTicket': reserved but not activated
+            if input('WARN: You do not have timeshift ticket. Do you want to reserve/activate it now? Y/[N] ').lower() == 'y':
                 print('Reserving...')
+                # POST = reserve, PATCH = activate/use
                 r = self.session.post(f'https://live2.nicovideo.jp/api/v2/programs/{self.video_id}/timeshift/reservation')
                 print('Tried POST, response:', r.status_code)
                 r = self.session.patch(f'https://live2.nicovideo.jp/api/v2/programs/{self.video_id}/timeshift/reservation')
                 print('Tried PATCH, response:', r.status_code)
                 if not r.status_code == 200:
-                    print('Failed to reserve. Please try reserving it manually in the webpage.')
+                    print('Reserving or activating failed. Please try reserving it manually in the webpage.')
                     return
                 # refetch live_data
                 live_data = self.fetch_page(self.url)
@@ -162,8 +173,22 @@ class NicoDownloader():
                 return
 
         if not live_data['site']['relive'].get('webSocketUrl', None):
-            print('No webSocketUrl exists. Please manually check.')
+            print('ERROR: No webSocketUrl exists. Please manually check.')
             return
+
+        if live_data['userProgramWatch']['canWatch'] == False:
+            reasons = ', '.join(live_data['userProgramWatch']['rejectedReasons'])
+            print(f'ERROR: You cannot watch this video because of: {reasons}.')
+            return
+
+        if live_data['programWatch']['condition'].get('payment') == 'Ticket' and not live_data['userProgramWatch']['payment']['hasTicket']:
+            # you can always download full comments, so no need to check if comments == 'only'
+            if comments == 'only':
+                pass
+            if input('WARN: This timeshift requires a ticket but you don\'t have one. '
+                     'The video will only have the trial part and black afterwards. '
+                     'Do you want to continue? Y/[N] ').lower() != 'y':
+                return
 
         ws_url = live_data['site']['relive']['webSocketUrl']
         audience_token = re.search(r'audience_token=(.+)', ws_url)[1]
@@ -189,12 +214,15 @@ class NicoDownloader():
                     ex.submit(self.download_comments, room_info, end_time_epoch)
             elif data['type'] == 'stream':
                 stream_info = data
-
-            if stream_info and (comments == 'no' or room_info):
+            # just grab all the info even if we don't need it, it doesn't save any time anyway.
+            if room_info and stream_info:
                 print('Got all the info we needed. Close WS.')
                 break
-
         ws.close()
+
+        if dump:
+            dump_json(room_info, f'{self.filename}.roominfo.json')
+            dump_json(stream_info, f'{self.filename}.streaminfo.json')
 
         if comments == 'only':
             ex.shutdown(wait=True)
@@ -252,6 +280,7 @@ if __name__ == "__main__":
     parser.add_argument('--thumb', action='store_true', help='Download thumbnail only. Only works for video type (not live).')
     parser.add_argument('--cookies', '-c', default='chrome', help='R|Cookie source. [Default: chrome]\nProvide either:\n  - A browser name to fetch from;\n  - The value of "user_session";\n  - A Netscape-style cookie file. ')
     parser.add_argument('--comments', '-d', default='yes', choices=['yes', 'no', 'only'], help='Control if comments (danmaku) are downloaded. [Default: yes]')
+    parser.add_argument('--dump', action='store_true', help='Dump all the metadata to json files.')
     args = parser.parse_args()
 
     nico_downloader = NicoDownloader(args.url, args.cookies)
@@ -259,6 +288,6 @@ if __name__ == "__main__":
     if args.thumb:
         nico_downloader.download_thumbnail()
     else:
-        nico_downloader.download_timeshift(info_only=args.info, verbose=args.verbose, comments=args.comments)
+        nico_downloader.download_timeshift(info_only=args.info, verbose=args.verbose, comments=args.comments, dump=args.dump)
 
 
