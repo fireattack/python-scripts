@@ -293,6 +293,8 @@ def get_current_time(now=None):
 
     if now is None:
         now = datetime.now()
+    # convert now to local timezone and then to JST
+    now = now.astimezone()
     jst_now = now.astimezone(tz)
 
     return {

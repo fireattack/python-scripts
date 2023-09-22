@@ -127,6 +127,11 @@ class NicoDownloader():
         dump_json(chats_all, f'{self.filename}.json')
 
     def download_timeshift(self, info_only=False, comments='yes', verbose=False, dump=False):
+        # download video type is not implemented yet
+        if self.video_type != 'live':
+            print('ERROR: download video type is not implemented yet.')
+            return
+
         live_data = self.fetch_page(self.url)
         title = live_data['program']['title']
         end_time_epoch = live_data["program"]["endTime"]
@@ -242,7 +247,9 @@ class NicoDownloader():
             print(self.session.get(playlist_url).text)
             print('==================== end ====================')
 
-        # do not use arrays. the way python quotes & is not compatible with cmd/bat which minyami uses. Make sure to use shell=True for *nix systems
+        # do not use arrays. the way python quotes & is not compatible with cmd/bat which minyami uses.
+        # See: https://stackoverflow.com/questions/74700723/
+        # Make sure to also use shell=True for *nix systems
         cmd = f'minyami -d "{playlist_url}" --key {audience_token},{max_quality} -o "{self.filename}.ts"'
         if verbose:
             cmd += ' --verbose'
@@ -275,12 +282,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(formatter_class=SmartFormatter)
     parser.add_argument("url", help="URL or ID of nicovideo webpage")
+    parser.add_argument('--verbose', '-v', action='store_true', help='Print verbose info for debugging.')
     parser.add_argument('--info', '-i', action='store_true', help='Print info only.')
-    parser.add_argument('--verbose', action='store_true', help='Print more info.')
-    parser.add_argument('--thumb', action='store_true', help='Download thumbnail only. Only works for video type (not live).')
-    parser.add_argument('--cookies', '-c', default='chrome', help='R|Cookie source. [Default: chrome]\nProvide either:\n  - A browser name to fetch from;\n  - The value of "user_session";\n  - A Netscape-style cookie file. ')
-    parser.add_argument('--comments', '-d', default='yes', choices=['yes', 'no', 'only'], help='Control if comments (danmaku) are downloaded. [Default: yes]')
     parser.add_argument('--dump', action='store_true', help='Dump all the metadata to json files.')
+    parser.add_argument('--thumb', action='store_true', help='Download thumbnail only. Only works for video type (not live type).')
+    parser.add_argument('--cookies', '-c', default='chrome', help='R|Cookie source. [Default: chrome]\nProvide either:\n  - A browser name to fetch from;\n  - The value of "user_session";\n  - A Netscape-style cookie file.')
+    parser.add_argument('--comments', '-d', default='yes', choices=['yes', 'no', 'only'], help='Control if comments (danmaku) are downloaded. [Default: yes]')
     args = parser.parse_args()
 
     nico_downloader = NicoDownloader(args.url, args.cookies)
