@@ -10,7 +10,7 @@ import browser_cookie3
 import websocket
 from rich.console import Console
 from rich.table import Table
-from util import download, dump_json, get, get_current_time, requests_retry_session, safeify, to_jp_time, load_cookie
+from util import download, dump_json, get, MyTime, requests_retry_session, safeify, to_jp_time, load_cookie
 
 console = Console()
 print = console.print
@@ -144,7 +144,7 @@ class NicoDownloader():
         t.add_column('Value')
         t.add_row('Video ID', self.video_id)
         t.add_row('Title', title)
-        t.add_row('Start time', get_current_time(begin_time_dt)["jst"]["str_pretty"] + " (JST)")
+        t.add_row('Start time', MyTime(begin_time_dt).jst("pretty") + " (JST)")
         t.add_row('Max quality', max_quality)
         t.add_row('Filename', self.filename)
         print(t)

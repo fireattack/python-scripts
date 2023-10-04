@@ -285,6 +285,41 @@ def parse_to_shortdate(date_str):
     except:
         return ""
 
+
+class MyTime:
+    def __init__(self, t=None):
+        import pytz
+
+        self.tz = pytz.timezone('Asia/Tokyo')
+
+        if t is None:
+            t = datetime.now()
+
+        # Convert now to local timezone and then to JST
+        self.naive_time = t.replace(tzinfo=None)
+        self.local_time = t.astimezone()
+        self.jst_time = self.local_time.astimezone(self.tz)
+
+    def _format_time(self, dt, format_type):
+        if format_type == 'obj':
+            return dt
+        elif format_type == "short":
+            return dt.strftime('%y%m%d_%H%M%S')
+        elif format_type == "pretty":
+            return dt.strftime('%Y-%m-%d (%a) %H:%M:%S')
+        else:
+            raise ValueError("Invalid format_type. Choose from 'obj', 'short', 'pretty'.")
+
+    def local(self, format_type="obj"):
+        return self._format_time(self.local_time, format_type)
+
+    def jst(self, format_type="obj"):
+        return self._format_time(self.jst_time, format_type)
+
+    def naive(self, format_type="obj"):
+        return self._format_time(self.naive_time, format_type)
+
+# deprecated, will be removed in the future
 def get_current_time(now=None):
     # pip install pytz
     import pytz
@@ -481,13 +516,13 @@ def requests_retry_session(
     session.mount('https://', adapter)
     return session
 
-def get(url, headers=None, cookies=None, encoding=None, session=None, parser='lxml'):
+def get(url, headers=None, cookies=None, encoding=None, session=None, parser='lxml', timeout=None):
     # pip install requests, lxml, beautifulsoup4
     from bs4 import BeautifulSoup
 
     if not session:
         session = requests_retry_session()
-    r = session.get(url, cookies=cookies, headers=headers)
+    r = session.get(url, cookies=cookies, headers=headers, timeout=timeout)
     if encoding:
         return BeautifulSoup(r.content, parser, from_encoding=encoding)
     else:
