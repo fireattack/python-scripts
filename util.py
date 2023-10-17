@@ -216,9 +216,13 @@ def array_to_range_text(a, sep=', ', dash='-'):
         prev_seg = seg
     return s
 
-def compare_obj(value_old, value, print_prefix='ROOT'):
+def compare_obj(value_old, value, print_prefix='ROOT', mute=False):
     # pip install rich
-    from rich import print
+    from rich import print as rprint
+
+    def print(*args, **kwargs):
+        if not mute:
+            rprint(*args, **kwargs)
 
     equal = True
     type_changed = False
@@ -232,14 +236,14 @@ def compare_obj(value_old, value, print_prefix='ROOT'):
                 print(f'{print_prefix}.{key}: [green]Added:[/green]', v)
             else:
                 v_old = value_old[key]
-                equal &= compare_obj(v_old, v, print_prefix=f'{print_prefix}.{key}')
+                equal &= compare_obj(v_old, v, print_prefix=f'{print_prefix}.{key}', mute=mute)
         for key, v in value_old.items():
             if key not in value:
                 print(f'{print_prefix}.{key}: [red]Removed:[/red]', v)
         return equal
     elif isinstance(value, list):
         for i in range(min(len(value), len(value_old))):
-            equal &= compare_obj(value_old[i], value[i], print_prefix=f'{print_prefix}[{i}]')
+            equal &= compare_obj(value_old[i], value[i], print_prefix=f'{print_prefix}[{i}]', mute=mute)
         if len(value_old) < len(value):
             for i in range(len(value_old), len(value)):
                 print(f'{print_prefix}[{i}]: [green]Added:[/green]', value[i])
