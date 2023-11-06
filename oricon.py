@@ -25,7 +25,7 @@ def get_jpeg_quality(f):
 
 def bytes_to_kb(bytes):
     bytes = int(bytes)
-    return f'{bytes/1000:.3f} KB'
+    return f'{bytes/1024:.3f} KB'
 
 def download(url_or_res, f):
     if isinstance(url_or_res, str):

@@ -10,7 +10,7 @@ from urllib.parse import unquote
 
 # all the external dependencies are imported inside the functions, so we can use this file in other projects without installing them.
 # to install them all, you can do:
-# pip install requests lxml beautifulsoup4 python-dateutil pytz pywin32 wcwidth rich
+# pip install requests lxml beautifulsoup4 python-dateutil pytz pyperclip wcwidth rich
 
 
 def to_list(a):
@@ -28,20 +28,14 @@ def print_cmd(cmd, prefix=''):
     print(prefix + ' '.join(commands_text_form))
 
 def copy(data):
-    # pip install pywin32
-    import win32clipboard
-    win32clipboard.OpenClipboard()
-    win32clipboard.EmptyClipboard()
-    win32clipboard.SetClipboardText(data, win32clipboard.CF_UNICODETEXT)
-    win32clipboard.CloseClipboard()
+    # pip install pyperclip
+    import pyperclip
+    pyperclip.copy(data)
 
 def get_clipboard_data():
-    # pip install pywin32
-    import win32clipboard
-    win32clipboard.OpenClipboard()
-    data = win32clipboard.GetClipboardData(win32clipboard.CF_UNICODETEXT)
-    win32clipboard.CloseClipboard()
-    return data
+    # pip install pyperclip
+    import pyperclip
+    return pyperclip.paste()
 
 def safeify(name, ignore_backslash=False):
     assert isinstance(name, str), f'Name must be a string, not {type(name)}'
@@ -54,7 +48,7 @@ def safeify(name, ignore_backslash=False):
         name = name.replace(illegal, template[illegal])
     return name
 
-def format_str(s, width=None, align='left'):
+def format_str(s, width=None, align='left', padding=' '):
     # pip install wcwidth
     import wcwidth
 
@@ -73,13 +67,13 @@ def format_str(s, width=None, align='left'):
         output += char
         length += size
     if align == 'left':
-        return output + ' '*(width-length)
+        return output + padding*(width-length)
     if align == 'right':
-        return ' '*(width-length) + output
+        return padding*(width-length) + output
     if align == 'center':
         left_space = (width-length)//2
         right_space = width-length-left_space
-        return ' '*left_space + output + ' '*right_space
+        return padding*left_space + output + padding*right_space
 
 class Table():
     # pip install wcwidth
@@ -97,6 +91,7 @@ class Table():
         else:
             raise Exception('No header or data given!')
         self.max_width = max_width
+
     def rows(self):
         for row in self.data:
             row_dict = {}
@@ -127,6 +122,7 @@ class Table():
                 return matched_rows
         else:
             return []
+
     def append(self, new_data):
         d = [''] * len(self.headers)
         for key, value in new_data.items():
@@ -135,6 +131,7 @@ class Table():
             col_idx = self.headers.index(key)
             d[col_idx] = value
         self.data.append(d)
+
     def print(self, formats=None, custom_print=None):
         import wcwidth
 
@@ -163,7 +160,7 @@ class Table():
                 str_format = "{}" if header_mode else col_format['str_format']
                 s = format_str(fmt(row[idx], str_format), width=col_format['width'], align=col_format['align'])
                 parts.append(s)
-            line = s = '  '.join(parts)
+            line = '  '.join(parts)
             if custom_print:
                 custom_print(line)
             else:
@@ -188,6 +185,10 @@ class Table():
         print_row(self.headers, header_mode=True)
         for row in self.data:
             print_row(row)
+
+        # return some useful info
+        total_width = sum(col_format['width'] for col_format in col_formats.values()) + 2 * (len(col_formats) - 1)
+        return {'total_width': total_width, 'col_formats': col_formats}
 
     def save(self, f):
         s = ''
@@ -505,6 +506,7 @@ def requests_retry_session(
     status_forcelist=(502, 503, 504),
     session=None,
 ):
+    # pip install requests urllib3
     import requests
     from requests.adapters import HTTPAdapter
     from urllib3.util.retry import Retry
@@ -521,7 +523,7 @@ def requests_retry_session(
     return session
 
 def get(url, headers=None, cookies=None, encoding=None, session=None, parser='lxml', timeout=None):
-    # pip install requests, lxml, beautifulsoup4
+    # pip install requests lxml beautifulsoup4
     from bs4 import BeautifulSoup
 
     if not session:
