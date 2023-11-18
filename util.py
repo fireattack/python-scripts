@@ -270,7 +270,7 @@ def compare_obj(value_old, value, print_prefix='ROOT', mute=False):
     return equal
 
 # ==================== datetime related ====================
-def parse_to_shortdate(date_str):
+def parse_to_shortdate(date_str, fmt=None):
     # pip install python-dateutil
     from dateutil import parser
 
@@ -285,8 +285,9 @@ def parse_to_shortdate(date_str):
         if m2 := re.search(pattern, date_str.replace(' ', '')):
             date_str = m2[1] + m2[2].zfill(2) + m2[3].zfill(2)
             break
+    if fmt is None: fmt = '%y%m%d'
     try:
-        return parser.parse(date_str, yearfirst=True).strftime('%y%m%d')
+        return parser.parse(date_str, yearfirst=True).strftime(fmt)
     except:
         return ""
 
@@ -466,8 +467,11 @@ def ensure_nonexist(f):
     i = 2
     stem = f.stem
     if m:= re.search(r'^(.+?)_(\d)$', stem):
-        stem = m[1]
-        i = int(m[2]) + 1
+        # only do so if for i < 10 and has no padding.
+        # so things like file_01, file_1986 etc. won't be renamed to confusing file_2, file_1987 etc.
+        if int(m[2]) < 10 and len(m[2]) == 1:
+            stem = m[1]
+            i = int(m[2]) + 1
     while f.exists():
         f = f.with_name(f'{stem}_{i}{f.suffix}')
         i = i + 1
