@@ -4,6 +4,8 @@ import os
 import re
 import sys
 import time
+import hashlib
+import shutil
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import unquote
@@ -477,6 +479,61 @@ def ensure_nonexist(f):
         i = i + 1
     return f
 
+def ensure_path_exists(path):
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f'Path {path} does not exist!')
+    return path
+
+def quickmd5(f):
+    hasher = hashlib.md5()
+    file_size = f.stat().st_size
+    buffer_size = 1024 * 1024  # 1MB
+
+    with f.open('rb') as f:
+        if file_size <= buffer_size:
+            # If the file is less than or equal to 1MB, read the entire file
+            data = f.read()
+            hasher.update(data)
+        else:
+            # Read the first 1MB
+            data = f.read(buffer_size)
+            hasher.update(data)
+
+            # Go to the end of the file to read the last 1MB
+            f.seek(-buffer_size, os.SEEK_END)
+            data = f.read(buffer_size)
+            hasher.update(data)
+
+    return f"{file_size}_{hasher.hexdigest()}" # this way is more readable than just return the hexdigest.
+
+def move_or_delete_duplicate(src, dst, verbose=True, conflict='error'):
+        if not src.exists():
+            raise FileNotFoundError(f"The source file {src} does not exist.")
+        if src == dst:
+            raise ValueError(f"Source and destination are the same: {src}")
+        if dst.exists():
+            if quickmd5(dst) == quickmd5(src):
+                print(f'[W] {src.name} is a duplicate. Remove.')
+                src.unlink()
+            else:
+                if conflict == 'skip':
+                    print(f'[W] Destination file {src.name} already exists and hash does not match. Skip.')
+                    return
+                elif conflict == 'error':
+                    raise FileExistsError(f"Destination file {dst} already exists.")
+                elif conflict == 'rename':
+                    dst = ensure_nonexist(dst)
+                    print(f'[W] Destination file {src.name} already exists. Rename to {dst.name}.')
+        if verbose:
+            if src.parent == dst.parent:
+                print(f"Rename {src.name} to {dst.name}")
+            elif src.name == dst.name:
+                print(f'Move {src.name} into {dst.parent.name}')
+            else:
+                print(f'Move {src.name} to {dst.name}')
+        shutil.move(src, dst)
+
 def batch_rename(renamings):
     """
     Non-conflict batch rename.
@@ -485,6 +542,15 @@ def batch_rename(renamings):
 
     files = [f for f, _ in renamings]
     dst_files = [f.with_name(name) for f, name in renamings]
+
+    if len(set(files)) != len(files):
+        print('[E] There are duplicate files in the list! Please check.')
+        return
+
+    if len(set(dst_files)) != len(dst_files):
+        print('[E] There are duplicate new filenames in the list! Please check.')
+        return
+
     # if new filename is conflicting and not in our current files, abort
     for new_f in dst_files:
         if new_f.exists() and new_f not in files:
