@@ -156,42 +156,38 @@ class NicoDownloader():
 
         # check video availability
         if not live_data['site']['relive'].get('webSocketUrl', None):
-            if 'timeshiftTicketExpired' in live_data['userProgramWatch']['rejectedReasons']:
-                print('ERROR: Timeshift ticket expired.')
-                return
-            # other reasons I have encountered so far:
+            assert live_data['userProgramWatch']['canWatch'] == False
             # 'notHaveTimeshiftTicket': not reserved yet
             # 'notUseTimeshiftTicket': reserved but not activated
-            if input('WARN: You do not have timeshift ticket. Do you want to reserve/activate it now? Y/[N] ').lower() == 'y':
-                print('Reserving...')
-                # POST = reserve, PATCH = activate/use
-                r = self.session.post(f'https://live2.nicovideo.jp/api/v2/programs/{self.video_id}/timeshift/reservation')
-                print('Tried POST, response:', r.status_code)
-                r = self.session.patch(f'https://live2.nicovideo.jp/api/v2/programs/{self.video_id}/timeshift/reservation')
-                print('Tried PATCH, response:', r.status_code)
-                if not r.status_code == 200:
-                    print('Reserving or activating failed. Please try reserving it manually in the webpage.')
+            if 'notHaveTimeshiftTicket' in live_data['userProgramWatch']['rejectedReasons'] or \
+                'notUseTimeshiftTicket' in live_data['userProgramWatch']['rejectedReasons']:
+                if input('WARN: You do not have timeshift ticket. Do you want to reserve/activate it now? Y/[N] ').lower() == 'y':
+                    print('Reserving...')
+                    # POST = reserve, PATCH = activate/use
+                    r = self.session.post(f'https://live2.nicovideo.jp/api/v2/programs/{self.video_id}/timeshift/reservation')
+                    print('Tried POST, response:', r.status_code)
+                    r = self.session.patch(f'https://live2.nicovideo.jp/api/v2/programs/{self.video_id}/timeshift/reservation')
+                    print('Tried PATCH, response:', r.status_code)
+                    if not r.status_code == 200:
+                        print('Reserving or activating failed. Please try reserving it manually in the webpage.')
+                        return
+                    # refetch live_data
+                    live_data = self.fetch_page(self.url)
+                else:
+                    print("Aborted.")
                     return
-                # refetch live_data
-                live_data = self.fetch_page(self.url)
             else:
+                reasons = ', '.join(live_data['userProgramWatch']['rejectedReasons'])
+                print(f'ERROR: You cannot watch this video because of: {reasons}.')
                 return
 
-        if not live_data['site']['relive'].get('webSocketUrl', None):
-            print('ERROR: No webSocketUrl exists. Please manually check.')
-            return
-
-        if live_data['userProgramWatch']['canWatch'] == False:
-            reasons = ', '.join(live_data['userProgramWatch']['rejectedReasons'])
-            print(f'ERROR: You cannot watch this video because of: {reasons}.')
-            return
-
+        # Add warning if it's trial only
         if live_data['programWatch']['condition'].get('payment') == 'Ticket' and not live_data['userProgramWatch']['payment']['hasTicket']:
             # you can always download full comments, so no need to check if comments == 'only'
             if comments == 'only':
                 pass
             if input('WARN: This timeshift requires a ticket but you don\'t have one. '
-                     'The video will only have the trial part and black afterwards. '
+                     'The video will only have the trial part, and be black afterwards. '
                      'Do you want to continue? Y/[N] ').lower() != 'y':
                 return
 
