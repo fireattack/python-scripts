@@ -516,6 +516,7 @@ def move_or_delete_duplicate(src, dst, verbose=True, conflict='error'):
             if quickmd5(dst) == quickmd5(src):
                 print(f'[W] {src.name} is a duplicate. Remove.')
                 src.unlink()
+                return
             else:
                 if conflict == 'skip':
                     print(f'[W] Destination file {src.name} already exists and hash does not match. Skip.')
@@ -524,14 +525,14 @@ def move_or_delete_duplicate(src, dst, verbose=True, conflict='error'):
                     raise FileExistsError(f"Destination file {dst} already exists.")
                 elif conflict == 'rename':
                     dst = ensure_nonexist(dst)
-                    print(f'[W] Destination file {src.name} already exists. Rename to {dst.name}.')
+                    print(f'[W] Destination file {src.name} already exists. Use filename {dst.name} instead.')
         if verbose:
             if src.parent == dst.parent:
                 print(f"Rename {src.name} to {dst.name}")
             elif src.name == dst.name:
-                print(f'Move {src.name} into {dst.parent.name}')
+                print(f'Move {src.name} into {dst.parent}')
             else:
-                print(f'Move {src.name} to {dst.name}')
+                print(f'Move {src.name} to {dst}')
         shutil.move(src, dst)
 
 def batch_rename(renamings):
