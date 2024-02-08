@@ -3,7 +3,8 @@ import json
 import re
 from datetime import datetime
 from subprocess import run
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
+from urllib.request import getproxies
 from pathlib import Path
 
 import browser_cookie3
@@ -36,7 +37,7 @@ class NicoDownloader():
                     print('Find user_session in cookie:', cookie.value)
                     break
             else:
-                print(f'WARN: cannot find user_session in cookie. You\'re probably not logged in.')
+                print(f'WARN: Cannot find user_session in cookie. You\'re probably not logged in.')
                 # exit(1) # make it non-fatal
 
         if cookies.lower() in ['chrome', 'firefox', 'edge']:
@@ -63,6 +64,14 @@ class NicoDownloader():
         self.session.cookies.update(cookies)
         self.session.headers.update(self.HEADERS)
 
+        self.proxy_host, self.proxy_port = None, None
+        proxies = getproxies()
+        if http_proxy := proxies.get('http'):
+            parsed = urlparse(http_proxy)
+            self.proxy_host, self.proxy_port = parsed.hostname, parsed.port
+            print(f'INFO: Using proxy {self.proxy_host}:{self.proxy_port} for websocket connection.')
+
+
     def fetch_page(self, url):
         soup = get(url, session=self.session)
         live_data = json.loads(soup.select_one('#embedded-data')['data-props'])
@@ -73,7 +82,7 @@ class NicoDownloader():
         url = room_info["data"]["messageServer"]["uri"]
         thread_id = room_info["data"]["threadId"]
 
-        ws = websocket.create_connection(url, header=self.HEADERS)
+        ws = websocket.create_connection(url, header=self.HEADERS, http_proxy_host=self.proxy_host, http_proxy_port=self.proxy_port)
         print(f'Start download comments from thread {thread_id}')
         sending = True
         while sending:
@@ -129,7 +138,7 @@ class NicoDownloader():
     def download_timeshift(self, info_only=False, comments='yes', verbose=False, dump=False):
         # download video type is not implemented yet
         if self.video_type != 'live':
-            print('ERROR: download video type is not implemented yet.')
+            print('ERROR: Download video type is not implemented yet.')
             return
 
         live_data = self.fetch_page(self.url)
@@ -196,7 +205,7 @@ class NicoDownloader():
         print(f'WS url is {ws_url}')
         print('Creating websocket connection...')
         # websocket.enableTrace(True)
-        ws = websocket.create_connection(ws_url, header=self.HEADERS)
+        ws = websocket.create_connection(ws_url, header=self.HEADERS, http_proxy_host=self.proxy_host, http_proxy_port=self.proxy_port)
         verbose and print("Sent startWatching")
         ws.send('{"type":"startWatching","data":{"stream":{"quality":"' + max_quality + '","protocol":"hls","latency":"low","chasePlay":false},"room":{"protocol":"webSocket","commentable":true},"reconnect":false}}')
         room_info = None
@@ -246,7 +255,7 @@ class NicoDownloader():
         # do not use arrays. the way python quotes & is not compatible with cmd/bat which minyami uses.
         # See: https://stackoverflow.com/questions/74700723/
         # Make sure to also use shell=True for *nix systems
-        cmd = f'minyami -d "{playlist_url}" --key {audience_token},{max_quality} -o "{self.filename}.ts"'
+        cmd = f'minyami -d "{playlist_url}" --key {audience_token},{max_quality} -o "{self.filename}.ts" --proxy "http://{self.proxy_host}:{self.proxy_port}"'
         if verbose:
             cmd += ' --verbose'
         print('CMD is:')
