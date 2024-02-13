@@ -899,7 +899,6 @@ def hello(a, b):
     print(f'hello: {a} and {b}')
 
 if __name__ == "__main__":
-    import sys
     if len(sys.argv) > 1:
         download(*sys.argv[1:])
     else:

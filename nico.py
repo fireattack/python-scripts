@@ -19,7 +19,7 @@ print = console.print
 class NicoDownloader():
     HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36'}
 
-    def __init__(self, url_or_video_id, cookies):
+    def __init__(self, url_or_video_id, cookies, proxy=None):
         if m := re.search(r'/watch/([^?&]+)', url_or_video_id):
             self.video_id = m[1]
         else:
@@ -64,13 +64,27 @@ class NicoDownloader():
         self.session.cookies.update(cookies)
         self.session.headers.update(self.HEADERS)
 
-        self.proxy_host, self.proxy_port = None, None
-        proxies = getproxies()
-        if http_proxy := proxies.get('http'):
-            parsed = urlparse(http_proxy)
-            self.proxy_host, self.proxy_port = parsed.hostname, parsed.port
-            print(f'INFO: Using proxy {self.proxy_host}:{self.proxy_port} for websocket connection.')
+        # proxy settings
+        if proxy.lower() == 'none' or proxy is None:
+            proxy = None
+        elif proxy == 'auto':
+            proxies = getproxies()
+            if proxy := proxies.get('http'):
+                print(f'INFO: automatically use system proxy {proxy}.')
 
+        # I don't think system proxy would be missing scheme, but just in case
+        if proxy and '://' not in proxy:
+            proxy = f'http://{proxy}'
+
+        self.session.proxies = {'http': proxy, 'https': proxy}
+        self.proxy = proxy
+
+    def create_ws(self, url):
+        host, port, type_ = None, None, None
+        if self.proxy:
+            parsed = urlparse(self.proxy)
+            host, port, type_ = parsed.hostname, parsed.port, parsed.scheme
+        return websocket.create_connection(url, header=self.HEADERS, http_proxy_host=host, http_proxy_port=port, proxy_type=type_)
 
     def fetch_page(self, url):
         soup = get(url, session=self.session)
@@ -82,7 +96,7 @@ class NicoDownloader():
         url = room_info["data"]["messageServer"]["uri"]
         thread_id = room_info["data"]["threadId"]
 
-        ws = websocket.create_connection(url, header=self.HEADERS, http_proxy_host=self.proxy_host, http_proxy_port=self.proxy_port)
+        ws = self.create_ws(url)
         print(f'Start download comments from thread {thread_id}')
         sending = True
         while sending:
@@ -205,7 +219,7 @@ class NicoDownloader():
         print(f'WS url is {ws_url}')
         print('Creating websocket connection...')
         # websocket.enableTrace(True)
-        ws = websocket.create_connection(ws_url, header=self.HEADERS, http_proxy_host=self.proxy_host, http_proxy_port=self.proxy_port)
+        ws = self.create_ws(ws_url)
         verbose and print("Sent startWatching")
         ws.send('{"type":"startWatching","data":{"stream":{"quality":"' + max_quality + '","protocol":"hls","latency":"low","chasePlay":false},"room":{"protocol":"webSocket","commentable":true},"reconnect":false}}')
         room_info = None
@@ -255,7 +269,9 @@ class NicoDownloader():
         # do not use arrays. the way python quotes & is not compatible with cmd/bat which minyami uses.
         # See: https://stackoverflow.com/questions/74700723/
         # Make sure to also use shell=True for *nix systems
-        cmd = f'minyami -d "{playlist_url}" --key {audience_token},{max_quality} -o "{self.filename}.ts" --proxy "http://{self.proxy_host}:{self.proxy_port}"'
+        cmd = f'minyami -d "{playlist_url}" --key {audience_token},{max_quality} -o "{self.filename}.ts"'
+        if self.proxy:
+             cmd += f' --proxy "{self.proxy}"'
         if verbose:
             cmd += ' --verbose'
         print('CMD is:')
@@ -293,9 +309,10 @@ if __name__ == "__main__":
     parser.add_argument('--thumb', action='store_true', help='Download thumbnail only. Only works for video type (not live type).')
     parser.add_argument('--cookies', '-c', default='chrome', help='R|Cookie source. [Default: chrome]\nProvide either:\n  - A browser name to fetch from;\n  - The value of "user_session";\n  - A Netscape-style cookie file.')
     parser.add_argument('--comments', '-d', default='yes', choices=['yes', 'no', 'only'], help='Control if comments (danmaku) are downloaded. [Default: yes]')
+    parser.add_argument('--proxy', help='Specify a proxy, "none", or "auto" (automatically detects system proxy settings). [Default: auto]')
     args = parser.parse_args()
 
-    nico_downloader = NicoDownloader(args.url, args.cookies)
+    nico_downloader = NicoDownloader(args.url, args.cookies, args.proxy)
 
     if args.thumb:
         nico_downloader.download_thumbnail()
