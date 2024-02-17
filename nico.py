@@ -312,8 +312,6 @@ if __name__ == "__main__":
     parser.add_argument('--proxy', default='auto', help='Specify a proxy, "none", or "auto" (automatically detects system proxy settings). [Default: auto]')
     args = parser.parse_args()
 
-    print(args)
-
     nico_downloader = NicoDownloader(args.url, args.cookies, args.proxy)
 
     if args.thumb:
