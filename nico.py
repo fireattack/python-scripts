@@ -178,7 +178,9 @@ class NicoDownloader():
             return
 
         # check video availability
-        if not live_data['site']['relive'].get('webSocketUrl', None):
+        # use while, this way when we reserve/activate timeshift ticket, we can refetch live_data and recheck
+        # to see if there is any other errors
+        while not live_data['site']['relive'].get('webSocketUrl', None):
             assert live_data['userProgramWatch']['canWatch'] == False
             # 'notHaveTimeshiftTicket': not reserved yet
             # 'notUseTimeshiftTicket': reserved but not activated
@@ -196,6 +198,7 @@ class NicoDownloader():
                         return
                     # refetch live_data
                     live_data = self.fetch_page(self.url)
+                    # back to the beginning of the loop
                 else:
                     print("Aborted.")
                     return
