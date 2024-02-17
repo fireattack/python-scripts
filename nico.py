@@ -65,7 +65,7 @@ class NicoDownloader():
         self.session.headers.update(self.HEADERS)
 
         # proxy settings
-        if proxy.lower() == 'none' or proxy is None:
+        if proxy is None or proxy.lower() == 'none':
             proxy = None
         elif proxy == 'auto':
             proxies = getproxies()
@@ -309,8 +309,10 @@ if __name__ == "__main__":
     parser.add_argument('--thumb', action='store_true', help='Download thumbnail only. Only works for video type (not live type).')
     parser.add_argument('--cookies', '-c', default='chrome', help='R|Cookie source. [Default: chrome]\nProvide either:\n  - A browser name to fetch from;\n  - The value of "user_session";\n  - A Netscape-style cookie file.')
     parser.add_argument('--comments', '-d', default='yes', choices=['yes', 'no', 'only'], help='Control if comments (danmaku) are downloaded. [Default: yes]')
-    parser.add_argument('--proxy', help='Specify a proxy, "none", or "auto" (automatically detects system proxy settings). [Default: auto]')
+    parser.add_argument('--proxy', default='auto', help='Specify a proxy, "none", or "auto" (automatically detects system proxy settings). [Default: auto]')
     args = parser.parse_args()
+
+    print(args)
 
     nico_downloader = NicoDownloader(args.url, args.cookies, args.proxy)
 
