@@ -19,18 +19,7 @@ print = console.print
 class NicoDownloader():
     HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36'}
 
-    def __init__(self, url_or_video_id, cookies, proxy=None):
-        if m := re.search(r'/watch/([^?&]+)', url_or_video_id):
-            self.video_id = m[1]
-        else:
-            self.video_id = url_or_video_id
-        if self.video_id.startswith('lv'):
-            self.url = f'https://live.nicovideo.jp/watch/{self.video_id}'
-            self.video_type = 'live'
-        else:
-            self.url = f'https://www.nicovideo.jp/watch/{self.video_id}'
-            self.video_type = 'video'
-
+    def __init__(self, cookies, proxy=None):
         def validate_cookie(cookies):
             for cookie in cookies:
                 if cookie.name == 'user_session':
@@ -70,7 +59,7 @@ class NicoDownloader():
         elif proxy == 'auto':
             proxies = getproxies()
             if proxy := proxies.get('http'):
-                print(f'INFO: automatically use system proxy {proxy}.')
+                print(f'INFO: automatically use system proxy {proxy}')
 
         # I don't think system proxy would be missing scheme, but just in case
         if proxy and '://' not in proxy:
@@ -78,6 +67,19 @@ class NicoDownloader():
 
         self.session.proxies = {'http': proxy, 'https': proxy}
         self.proxy = proxy
+
+    def _parse_url_or_video_id(self, url_or_video_id):
+        if m := re.search(r'/watch/([^?&]+)', url_or_video_id):
+            video_id = m[1]
+        else:
+            video_id = url_or_video_id
+        if video_id.startswith('lv'):
+            url = f'https://live.nicovideo.jp/watch/{video_id}'
+            video_type = 'live'
+        else:
+            url = f'https://www.nicovideo.jp/watch/{video_id}'
+            video_type = 'video'
+        return video_id, url, video_type
 
     def create_ws(self, url):
         host, port, type_ = None, None, None
@@ -91,7 +93,7 @@ class NicoDownloader():
         live_data = json.loads(soup.select_one('#embedded-data')['data-props'])
         return live_data
 
-    def download_comments(self, room_info, when):
+    def download_comments(self, room_info, when, filename):
         chats_all = []
         url = room_info["data"]["messageServer"]["uri"]
         thread_id = room_info["data"]["threadId"]
@@ -146,34 +148,36 @@ class NicoDownloader():
         chats_all = _
         chats_all.sort(key=lambda x: (x['chat']['date'], x['chat'].get('vpos', 0)))
 
-        print(f'Total unique comments: {len(chats_all)}. Save to {self.filename}.json.')
-        dump_json(chats_all, f'{self.filename}.json')
+        print(f'Total unique comments: {len(chats_all)}. Save to {filename}.json.')
+        dump_json(chats_all, f'{filename}.json')
 
-    def download_timeshift(self, info_only=False, comments='yes', verbose=False, dump=False):
+    def download_timeshift(self, url_or_video_id, info_only=False, comments='yes', verbose=False, dump=False):
+        video_id, url, video_type = self._parse_url_or_video_id(url_or_video_id)
+
         # download video type is not implemented yet
-        if self.video_type != 'live':
+        if video_type != 'live':
             print('ERROR: Download video type is not implemented yet.')
             return
 
-        live_data = self.fetch_page(self.url)
+        live_data = self.fetch_page(url)
         title = live_data['program']['title']
         end_time_epoch = live_data["program"]["endTime"]
         begin_time_dt = to_jp_time(datetime.fromtimestamp(live_data['program']['beginTime']))
         date = begin_time_dt.strftime('%y%m%d')
         max_quality = live_data['program']['stream']['maxQuality']
-        self.filename = safeify(f"{date} {title}_{self.video_id}")
+        filename = safeify(f"{date} {title}_{video_id}")
         t = Table(show_header=False, show_lines=True)
         t.add_column('Desc.', style='bold green')
         t.add_column('Value')
-        t.add_row('Video ID', self.video_id)
+        t.add_row('Video ID', video_id)
         t.add_row('Title', title)
         t.add_row('Start time', MyTime(begin_time_dt).jst("pretty") + " (JST)")
         t.add_row('Max quality', max_quality)
-        t.add_row('Filename', self.filename)
+        t.add_row('Filename', filename)
         print(t)
 
         if dump:
-            dump_json(live_data, f'{self.filename}.info.json')
+            dump_json(live_data, f'{filename}.info.json')
         if info_only:
             return
 
@@ -189,15 +193,15 @@ class NicoDownloader():
                 if input('WARN: You do not have timeshift ticket. Do you want to reserve/activate it now? Y/[N] ').lower() == 'y':
                     print('Reserving...')
                     # POST = reserve, PATCH = activate/use
-                    r = self.session.post(f'https://live2.nicovideo.jp/api/v2/programs/{self.video_id}/timeshift/reservation')
+                    r = self.session.post(f'https://live2.nicovideo.jp/api/v2/programs/{video_id}/timeshift/reservation')
                     print('Tried POST, response:', r.status_code)
-                    r = self.session.patch(f'https://live2.nicovideo.jp/api/v2/programs/{self.video_id}/timeshift/reservation')
+                    r = self.session.patch(f'https://live2.nicovideo.jp/api/v2/programs/{video_id}/timeshift/reservation')
                     print('Tried PATCH, response:', r.status_code)
                     if not r.status_code == 200:
                         print('Reserving or activating failed. Please try reserving it manually in the webpage.')
                         return
                     # refetch live_data
-                    live_data = self.fetch_page(self.url)
+                    live_data = self.fetch_page(url)
                     # back to the beginning of the loop
                 else:
                     print("Aborted.")
@@ -238,7 +242,7 @@ class NicoDownloader():
             if data['type'] == 'room':
                 room_info = data
                 if comments in ['yes', 'only']:
-                    ex.submit(self.download_comments, room_info, end_time_epoch)
+                    ex.submit(self.download_comments, room_info, end_time_epoch, filename)
             elif data['type'] == 'stream':
                 stream_info = data
             # just grab all the info even if we don't need it, it doesn't save any time anyway.
@@ -248,8 +252,8 @@ class NicoDownloader():
         ws.close()
 
         if dump:
-            dump_json(room_info, f'{self.filename}.roominfo.json')
-            dump_json(stream_info, f'{self.filename}.streaminfo.json')
+            dump_json(room_info, f'{filename}.roominfo.json')
+            dump_json(stream_info, f'{filename}.streaminfo.json')
 
         if comments == 'only':
             ex.shutdown(wait=True)
@@ -272,7 +276,7 @@ class NicoDownloader():
         # do not use arrays. the way python quotes & is not compatible with cmd/bat which minyami uses.
         # See: https://stackoverflow.com/questions/74700723/
         # Make sure to also use shell=True for *nix systems
-        cmd = f'minyami -d "{playlist_url}" --key {audience_token},{max_quality} -o "{self.filename}.ts"'
+        cmd = f'minyami -d "{playlist_url}" --key {audience_token},{max_quality} -o "{filename}.ts"'
         if self.proxy:
              cmd += f' --proxy "{self.proxy}"'
         if verbose:
@@ -281,18 +285,20 @@ class NicoDownloader():
         print(cmd)
         run(cmd, shell=True)
 
-    def download_thumbnail(self):
-        if self.video_type == 'live':
+    def download_thumbnail(self, url_or_video_id):
+        video_id, url, video_type = self._parse_url_or_video_id(url_or_video_id)
+
+        if video_type == 'live':
             print('Cannot download thumbnail for live.')
             return
 
-        soup = get(self.url, session=self.session)
+        soup = get(url, session=self.session)
         data = json.loads(soup.find(id="js-initial-watch-data")["data-api-data"])
         thumbnails = data["video"]["thumbnail"]
         # get the last value, which is the highest resolution
         name, thumbnail_url = list(thumbnails.items())[-1]
         print(f"Best thumbnail variant: {name}, {thumbnail_url}")
-        download(thumbnail_url, filename=self.video_id)
+        download(thumbnail_url, filename=video_id)
 
 if __name__ == "__main__":
     import argparse
@@ -315,11 +321,11 @@ if __name__ == "__main__":
     parser.add_argument('--proxy', default='auto', help='Specify a proxy, "none", or "auto" (automatically detects system proxy settings). [Default: auto]')
     args = parser.parse_args()
 
-    nico_downloader = NicoDownloader(args.url, args.cookies, args.proxy)
+    nico_downloader = NicoDownloader(args.cookies, args.proxy)
 
     if args.thumb:
-        nico_downloader.download_thumbnail()
+        nico_downloader.download_thumbnail(args.url)
     else:
-        nico_downloader.download_timeshift(info_only=args.info, verbose=args.verbose, comments=args.comments, dump=args.dump)
+        nico_downloader.download_timeshift(args.url, info_only=args.info, verbose=args.verbose, comments=args.comments, dump=args.dump)
 
 

@@ -416,13 +416,15 @@ def timeme(func):
     return wrapper
 
 # ==================== file related ====================
-def dump_json(mydict, filename):
+def dump_json(mydict, filename, **kwargs):
     filename = Path(filename)
     if filename.suffix.lower() !='.json':
         filename = filename.with_suffix('.json')
     filename.parent.mkdir(parents=True, exist_ok=True)
+    default_kwargs = dict(ensure_ascii=False, indent=2)
+    default_kwargs.update(kwargs)
     with filename.open('w', encoding='utf-8') as f:
-        json.dump(mydict, f, ensure_ascii=False, indent=2)
+        json.dump(mydict, f, **default_kwargs)
 
 def load_json(filename, encoding='utf-8'):
     filename = Path(filename)
