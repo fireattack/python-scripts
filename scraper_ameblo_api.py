@@ -7,6 +7,10 @@ from dateutil import parser as dateparser
 
 from util import safeify, download, get, dump_json, parse_to_shortdate, requests_retry_session
 
+
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+headers = {'User-Agent': UA}
+
 def load_init_data(soup):
     for script in soup('script'):
         if 'window.INIT_DATA' in script.text:
@@ -18,7 +22,7 @@ def first(my_dict):
 
 def download_image(blog_id, id, save_folder='.'):
     # print(f'Processing {id}...')
-    data = requests_retry_session().get(f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{id}/images').json()
+    data = requests_retry_session().get(f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{id}/images', headers=headers).json()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
         for idx, img in enumerate(data['data'], 1):
@@ -38,7 +42,7 @@ def download_image(blog_id, id, save_folder='.'):
 def download_text(blog_id, id, save_folder='.'):
     # print(f'Processing {id}...')
     url = f'https://ameblo.jp/{blog_id}/entry-{id}.html'
-    soup = get(url)
+    soup = get(url, headers=headers)
     data = load_init_data(soup)
     if data:
         print('.', end="", flush=True)
@@ -70,22 +74,21 @@ def parse_image_list(blog_id, start_entry, until=None):
     results = []
     while True:
         print(f'Parsing {blog_id} starting from {start_entry}...')
-        myjson = requests_retry_session().get(
-            f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{start_entry}/neighbors?limit=100').json()
-        for entry in myjson['data']:
+        data = requests_retry_session().get(f'https://blogimgapi.ameba.jp/blog/{blog_id}/entries/{start_entry}/neighbors?limit=100', headers=headers).json()
+        for entry in data['data']:
             id = entry["entryId"]
             if until and str(id) == str(until):
                 print(f'Reached last record {until}! Stopping..')
                 return results
             results.append(id)
-        if not myjson['paging']['nextUrl']:
+        if not data['paging']['nextUrl']:
             return results
-        start_entry = re.search(r'/entries/(\d+)/', myjson['paging']['nextUrl'])[1]
+        start_entry = re.search(r'/entries/(\d+)/', data['paging']['nextUrl'])[1]
 
 
 def parse_list(blog_id, theme_name=None, limit=10, until=None):
     try: # Get blog_num_id
-        soup = get(f'https://ameblo.jp/{blog_id}/')
+        soup = get(f'https://ameblo.jp/{blog_id}/', headers=headers)
         data = load_init_data(soup)
         blog_num_id = first(data['bloggerState']['bloggerMap'])['blog']
         endpoint = f'https://ameblo.jp/_api/blogEntries;blogId={blog_num_id};'
@@ -93,7 +96,7 @@ def parse_list(blog_id, theme_name=None, limit=10, until=None):
         if theme_name:
             # get themes
             first_theme_id = first(data['bloggerState']['blogMap']).get('moblog_theme_id', None) or first(data['entryState']['entryMap']).get('theme_id', None)
-            soup2 = get(f'https://ameblo.jp/{blog_id}/theme-{first_theme_id}.html')
+            soup2 = get(f'https://ameblo.jp/{blog_id}/theme-{first_theme_id}.html', headers=headers)
             data2 = load_init_data(soup2)
             themes = data2['themesState']['themeMap']
             theme_id_to_be_used = None
@@ -119,7 +122,7 @@ def parse_list(blog_id, theme_name=None, limit=10, until=None):
     while True:
         url = f'{endpoint}limit={limit};offset={offset}'
         print(f'Loading {url}...')
-        data = requests_retry_session().get(url).json()
+        data = requests_retry_session().get(url, headers=headers).json()
 
         if theme_name:
             blogs = data['entryMap']
