@@ -71,6 +71,7 @@ def horizontal_stack(images, background_color=(0, 0, 0)):
         x_offset += im.size[0]
     return new_im
 
+# seems can be replaced by Image.thumbnail?
 def fit_image_into_box(image, width, height, background_color=(0, 0, 0)):
     width_scaling_factor = width / image.width
     height_scaling_factor = height / image.height
