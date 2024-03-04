@@ -285,7 +285,7 @@ class NicoDownloader():
         print(cmd)
         run(cmd, shell=True)
 
-    def download_thumbnail(self, url_or_video_id):
+    def download_thumbnail(self, url_or_video_id, info_only=False, dump=False):
         video_id, url, video_type = self._parse_url_or_video_id(url_or_video_id)
 
         if video_type == 'live':
@@ -294,6 +294,10 @@ class NicoDownloader():
 
         soup = get(url, session=self.session)
         data = json.loads(soup.find(id="js-initial-watch-data")["data-api-data"])
+        if dump:
+            dump_json(data, f'{video_id}.info.json')
+        if info_only:
+            return
         thumbnails = data["video"]["thumbnail"]
         # get the last value, which is the highest resolution
         name, thumbnail_url = list(thumbnails.items())[-1]
@@ -324,7 +328,7 @@ if __name__ == "__main__":
     nico_downloader = NicoDownloader(args.cookies, args.proxy)
 
     if args.thumb:
-        nico_downloader.download_thumbnail(args.url)
+        nico_downloader.download_thumbnail(args.url, info_only=args.info, dump=args.dump)
     else:
         nico_downloader.download_timeshift(args.url, info_only=args.info, verbose=args.verbose, comments=args.comments, dump=args.dump)
 
