@@ -276,6 +276,10 @@ def parse_to_shortdate(date_str, fmt=None):
     # pip install python-dateutil
     from dateutil import parser
 
+    if fmt is None: fmt = '%y%m%d'
+    if isinstance(date_str, datetime):
+        return date_str.strftime(fmt)
+
     date_str = re.sub(r'[\s　]+', ' ', date_str).strip()
     patterns = [r'(\d+)年 *(\d+)月 *(\d+)日', r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})']
     for pattern in patterns:
@@ -287,7 +291,7 @@ def parse_to_shortdate(date_str, fmt=None):
         if m2 := re.search(pattern, date_str.replace(' ', '')):
             date_str = m2[1] + m2[2].zfill(2) + m2[3].zfill(2)
             break
-    if fmt is None: fmt = '%y%m%d'
+
     try:
         return parser.parse(date_str, yearfirst=True).strftime(fmt)
     except:
@@ -786,7 +790,13 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                 web_name = f'{prefix} ' + web_name
             f = p / safeify(web_name)
         if "Content-Disposition" in r.headers: # Get filename from the header
-            _, params = parse_header(r.headers["Content-Disposition"])
+            # TODO: write a parser myself since cgi.parse_header is deprecated.
+
+            content_disposition = r.headers["Content-Disposition"]
+            # HACK: parse_header doesn't work if there is no value like "attachment; filename=xxx", so we add a dummy value.
+            if content_disposition.startswith('filename'):
+                content_disposition = 'attachment; ' + r.headers["Content-Disposition"]
+            _, params = parse_header(content_disposition)
             header_name = ''
             if 'filename*' in params:
                 header_name = unquote(params['filename*'].lstrip("UTF-8''"))
