@@ -150,8 +150,8 @@ class NicoDownloader():
         chats_all = _
         chats_all.sort(key=lambda x: (x['chat']['date'], x['chat'].get('vpos', 0)))
 
-        print(f'Total unique comments: {len(chats_all)}. Save to {filename}.json.')
         dump_json(chats_all, self.save_dir / f'{filename}.json')
+        print(f'Total unique comments: {len(chats_all)}. Saved to "{filename}.json".')
 
     def download_timeshift(self, url_or_video_id, info_only=False, comments='yes', verbose=False, dump=False, auto_reserve=False):
         video_id, url, video_type = self._parse_url_or_video_id(url_or_video_id)
@@ -159,7 +159,6 @@ class NicoDownloader():
         return_value = {
             'id': video_id,
             'url': url,
-            'title': title,
             'type': video_type,
         }
 
@@ -189,6 +188,7 @@ class NicoDownloader():
         print(t)
 
         return_value.update({
+            'title': title,
             'begin_time': begin_time_dt,
             'end_time': end_time_dt,
             'short_date': date,
@@ -363,6 +363,7 @@ if __name__ == "__main__":
     parser.add_argument('--comments', '-d', default='yes', choices=['yes', 'no', 'only'], help='Control if comments (danmaku) are downloaded. [Default: yes]')
     parser.add_argument('--proxy', default='auto', help='Specify a proxy, "none", or "auto" (automatically detects system proxy settings). [Default: auto]')
     parser.add_argument('--save-dir', '-o', help='Specify the directory to save the downloaded files. [Default: current directory]')
+    parser.add_argument('--reserve', action='store_true', help='Automatically reserve timeshift ticket if not reserved yet. [Default: no]')
 
     args = parser.parse_args()
 
@@ -371,6 +372,6 @@ if __name__ == "__main__":
     if args.thumb:
         nico_downloader.download_thumbnail(args.url, info_only=args.info, dump=args.dump)
     else:
-        nico_downloader.download_timeshift(args.url, info_only=args.info, verbose=args.verbose, comments=args.comments, dump=args.dump)
+        nico_downloader.download_timeshift(args.url, info_only=args.info, verbose=args.verbose, comments=args.comments, dump=args.dump, auto_reserve=args.reserve)
 
 
