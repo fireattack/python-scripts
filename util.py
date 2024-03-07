@@ -660,9 +660,10 @@ def load_cookie(s):
             if cookie.expires == 0:
                 cookie.expires = int(time.time()+ 86400)
         return convert(cj)
+
     if re.search(r'^(.+?):\s*(.+?)', str(s)):
         cookies = RequestsCookieJar()
-        for k, v in re.findall(r'(.+?):\s*([^;]+?)(;|$)', s):
+        for k, v in re.findall(r'(.+?):\s*([^;]+?)(?:;|$)', s):
             cookies.set(k, v)
         return cookies
 
