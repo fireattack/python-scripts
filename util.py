@@ -10,10 +10,13 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import unquote
 
-# all the external dependencies are imported inside the functions, so we can use this file in other projects without installing them.
+# all the external dependencies are imported inside the functions,
+# so we can use this file in other projects without installing them.
+# or to copy and paste the functions to other projects.
 # to install them all, you can do:
-# pip install requests lxml beautifulsoup4 python-dateutil pytz pyperclip wcwidth rich
+# pip install requests lxml beautifulsoup4 python-dateutil pytz pyperclip wcwidth rich browser_cookie3
 
+TWITTER_FILENAME_RE = re.compile(r'^(?P<screen_name>.+)-(?P<id>\d+)-(?P<date>\d{8})_(?P<time>\d{6})-(?P<type>vid|gif|img|thumb)(?P<index>\d*)(?P<dupe> *\(\d+\))*(?P<suffix>\.(?:mp4|zip|jpg|png))$')
 
 def to_list(a):
     return a if not a or isinstance(a, list) else [a]
@@ -614,16 +617,32 @@ def get(url, headers=None, cookies=None, encoding=None, session=None, parser='lx
 def get_webname(url):
     return unquote(url.split('?')[0].split('/')[-1])
 
-def load_cookie(filename):
+def load_cookie(s):
     from http.cookiejar import MozillaCookieJar
+    import browser_cookie3
+    # pip install browser_cookie3
 
-    cj = MozillaCookieJar(filename)
-    cj.load(ignore_expires=True, ignore_discard=True)
-    for cookie in cj:
-        if cookie.expires == 0:
-            cookie.expires = int(time.time()+ 86400)
+    if m := re.search(r'^(chrome|firefox|edge)(/.+)?', str(s), re.IGNORECASE):
+        domain_name = m[2].lstrip('/') if m[2] else ""
+        if m[1] == 'chrome':
+            cookies = browser_cookie3.chrome(domain_name=domain_name)
+        elif m[1] == 'firefox':
+            cookies = browser_cookie3.firefox(domain_name=domain_name)
+        elif m[1] == 'edge':
+            cookies = browser_cookie3.edge(domain_name=domain_name)
+        return cookies
 
-    return cj
+    if Path(s).exists():
+        cj = MozillaCookieJar(s)
+        cj.load(ignore_expires=True, ignore_discard=True)
+        for cookie in cj:
+            if cookie.expires == 0:
+                cookie.expires = int(time.time()+ 86400)
+        return cj
+
+    if re.search(r'^(.+?):\s*(.+?)', str(s)):
+        return dict(re.findall(r'(.+?):\s*([^;]+?)(;|$)', s))
+
 
 def download(url, filename=None, save_path='.', cookies=None, session=None, dry_run=False,
              dupe='skip_same_size', referer=None, headers=None, placeholder=True, prefix='',
@@ -790,10 +809,12 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                 web_name = f'{prefix} ' + web_name
             f = p / safeify(web_name)
         if "Content-Disposition" in r.headers: # Get filename from the header
-            # TODO: write a parser myself since cgi.parse_header is deprecated.
+            # TODO: write a parser myself since cgi.parse_header is deprecated and has its own problems as noted below in "HACK".
 
             content_disposition = r.headers["Content-Disposition"]
-            # HACK: parse_header doesn't work if there is no value like "attachment; filename=xxx", so we add a dummy value.
+            # HACK: parse_header doesn't work if there is no value of "attachment" etc. exists.
+            # Like content_disposition == "filename=xxx". So we add a dummy value.
+            # I think it's non-standard, but it's relatively common.
             if content_disposition.startswith('filename'):
                 content_disposition = 'attachment; ' + r.headers["Content-Disposition"]
             _, params = parse_header(content_disposition)
@@ -818,7 +839,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
         expected_size = 0
 
     # Check it again before download starts.
-    # Note: if dupe=overwrite, it will check (and print) twice, before and after downloading. This is by design.
+    # NOTE: if dupe=overwrite, it will check (and print) twice, before and after downloading. This is by design.
     if not (f := check_dupe(f, size=expected_size)):
         return 'Exists'
     print(f'Downloading {f.name} from {url}...', 2)

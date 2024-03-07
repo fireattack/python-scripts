@@ -11,3 +11,4 @@ _test*.py
 *.txt
 *.json
 /SourceHanSans-Regular.otf
+/_old
