@@ -16,7 +16,12 @@ from urllib.parse import unquote
 # to install them all, you can do:
 # pip install requests lxml beautifulsoup4 python-dateutil pytz pyperclip wcwidth rich browser_cookie3
 
-TWITTER_FILENAME_RE = re.compile(r'^(?P<screen_name>.+)-(?P<id>\d+)-(?P<date>\d{8})_(?P<time>\d{6})-(?P<type>vid|gif|img|thumb)(?P<index>\d*)(?P<dupe> *\(\d+\))*(?P<suffix>\.(?:mp4|zip|jpg|png))$')
+# The first version must start with screen_name and ended with type[index][ dupe].suffix
+# The second one allows optional arbitrary prefix or suffix.
+# NOTE: to make it simpler, the returned m['extra'] and m['dupe'] will have leading space or hyphen with it.
+TWITTER_FILENAME_RE = re.compile(r'^(?P<screen_name>\w+)-(?P<id>\d+)-(?P<date>\d{8})_(?P<time>\d{6})-(?P<type>[^-.]+?)(?P<index>\d*)(?P<dupe> *\(\d+\))?(?P<suffix>\.(?:mp4|zip|jpg|png))$')
+TWITTER_FILENAME_RELEXED_RE = re.compile(r'^(?:(?P<prefix>.+?)(?: +?|[-]??))??(?P<screen_name>\w+)-(?P<id>\d+)-(?P<date>\d{8})_(?P<time>\d{6})-(?P<type>[^-.]+?)(?P<index>\d*)(?P<extra>[ _-].+?)??(?P<dupe> *\(\d+\))?(?P<suffix>\.(?:mp4|zip|jpg|png))$')
+
 
 def to_list(a):
     return a if not a or isinstance(a, list) else [a]
@@ -619,18 +624,34 @@ def get_webname(url):
 
 def load_cookie(s):
     from http.cookiejar import MozillaCookieJar
+    from requests.cookies import RequestsCookieJar, create_cookie
     import browser_cookie3
     # pip install browser_cookie3
+
+    def convert(cj):
+        cookies = RequestsCookieJar()
+        for cookie in cj:
+            requests_cookie = create_cookie(
+            name=cookie.name,
+            value=cookie.value,
+            domain=cookie.domain,
+            path=cookie.path,
+            secure=cookie.secure,
+            rest={'HttpOnly': cookie.get_nonstandard_attr('HttpOnly')},
+            expires=cookie.expires,
+            )
+            cookies.set_cookie(requests_cookie)
+        return cookies
 
     if m := re.search(r'^(chrome|firefox|edge)(/.+)?', str(s), re.IGNORECASE):
         domain_name = m[2].lstrip('/') if m[2] else ""
         if m[1] == 'chrome':
-            cookies = browser_cookie3.chrome(domain_name=domain_name)
+            cj = browser_cookie3.chrome(domain_name=domain_name)
         elif m[1] == 'firefox':
-            cookies = browser_cookie3.firefox(domain_name=domain_name)
+            cj = browser_cookie3.firefox(domain_name=domain_name)
         elif m[1] == 'edge':
-            cookies = browser_cookie3.edge(domain_name=domain_name)
-        return cookies
+            cj = browser_cookie3.edge(domain_name=domain_name)
+        return convert(cj)
 
     if Path(s).exists():
         cj = MozillaCookieJar(s)
@@ -638,10 +659,14 @@ def load_cookie(s):
         for cookie in cj:
             if cookie.expires == 0:
                 cookie.expires = int(time.time()+ 86400)
-        return cj
-
+        return convert(cj)
     if re.search(r'^(.+?):\s*(.+?)', str(s)):
-        return dict(re.findall(r'(.+?):\s*([^;]+?)(;|$)', s))
+        cookies = RequestsCookieJar()
+        for k, v in re.findall(r'(.+?):\s*([^;]+?)(;|$)', s):
+            cookies.set(k, v)
+        return cookies
+
+    raise ValueError(f'Invalid cookie string: {s}')
 
 
 def download(url, filename=None, save_path='.', cookies=None, session=None, dry_run=False,
