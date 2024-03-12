@@ -12,17 +12,23 @@ from urllib.parse import unquote
 
 # all the external dependencies are imported inside the functions,
 # so we can use this file in other projects without installing them.
-# or to copy and paste the functions to other projects.
+# or to copy and paste the functions to other public projects directly.
 # to install them all, you can do:
 # pip install requests lxml beautifulsoup4 python-dateutil pytz pyperclip wcwidth rich browser_cookie3
 
-# The first version must start with screen_name and ended with type[index][ dupe].suffix
-# The second one allows optional arbitrary prefix or suffix.
-# NOTE: to make it simpler, the returned m['extra'] and m['dupe'] will have leading space or hyphen with it.
+# # ==================== CONSTANTS ====================
+
+'''Twitter media name handle
+The filename format I use, inherited from good old twMediaDownloader (RIP: here is a mirror: https://github.com/fireattack/twMediaDownloader).
+The first version must start with screen_name and ended with type[index][ dupe].suffix
+The second one allows optional arbitrary prefix or suffix.
+NOTE: to make it simpler, the returned m['extra'] and m['dupe'] will have leading space or hyphen with it.
+'''
 TWITTER_FILENAME_RE = re.compile(r'^(?P<screen_name>\w+)-(?P<id>\d+)-(?P<date>\d{8})_(?P<time>\d{6})-(?P<type>[^-.]+?)(?P<index>\d*)(?P<dupe> *\(\d+\))?(?P<suffix>\.(?:mp4|zip|jpg|png))$')
 TWITTER_FILENAME_RELEXED_RE = re.compile(r'^(?:(?P<prefix>.+?)(?: +?|[-]??))??(?P<screen_name>\w+)-(?P<id>\d+)-(?P<date>\d{8})_(?P<time>\d{6})-(?P<type>[^-.]+?)(?P<index>\d*)(?P<extra>[ _-].+?)??(?P<dupe> *\(\d+\))?(?P<suffix>\.(?:mp4|zip|jpg|png))$')
 
 
+# ==================== data structure manipulation & misc. ====================
 def to_list(a):
     return a if not a or isinstance(a, list) else [a]
 
@@ -48,6 +54,20 @@ def get_clipboard_data():
     return pyperclip.paste()
 
 def safeify(name, ignore_backslash=False):
+    """
+    Replaces illegal characters in a given name with safe alternatives.
+
+    Args:
+        name (str): The name to be made safe.
+        ignore_backslash (bool, optional): Whether to ignore backslashes. Defaults to False.
+
+    Returns:
+        str: The safe version of the name.
+
+    Raises:
+        AssertionError: If the name is not a string.
+    """
+
     assert isinstance(name, str), f'Name must be a string, not {type(name)}'
 
     template = {'\\': '＼', '/': '／', ':': '：', '*': '＊', '?': '？', '"': '＂', '<': '＜', '>': '＞', '|': '｜','\n':'','\r':'','\t':''}
@@ -59,6 +79,19 @@ def safeify(name, ignore_backslash=False):
     return name
 
 def format_str(s, width=None, align='left', padding=' '):
+    """
+    Format a string `s` with a specified width, alignment, and padding.
+
+    Args:
+        s (str): The string to be formatted.
+        width (int, optional): The desired width of the formatted string. If not provided, the original string will be returned as is. Defaults to None.
+        align (str, optional): The alignment of the formatted string. Possible values are 'left', 'right', and 'center'. Defaults to 'left'.
+        padding (str, optional): The padding character used to fill the remaining space in the formatted string. Defaults to ' '.
+
+    Returns:
+        str: The formatted string.
+
+    """
     # pip install wcwidth
     import wcwidth
 
@@ -395,6 +428,7 @@ def td_format(td_object_or_sec, long_form=True):
     else:
         return "".join(strings)
 
+# deprecated, just use MyTime(dt).jst()
 def to_jp_time(dt, input_timezone=None):
     # pip install python-dateutil pytz
     from dateutil import parser
@@ -418,6 +452,7 @@ def tac(print=True):
         builtins.print(f'Time passed: {t:.2f} s')
     return t
 
+# a decorator to time a function
 def timeme(func):
     def wrapper(*args, **kwargs):
         start_time = time.time()
@@ -480,6 +515,10 @@ def remove_empty_folders(directory, remove_root=True): #Including root.
         print('Error:', e)
 
 def ensure_nonexist(f):
+    '''
+    Ensure the file does not exist. If it does, rename it to filename_2, filename_3, etc.
+    '''
+
     i = 2
     stem = f.stem
     if m:= re.search(r'^(.+?)_(\d)$', stem):
@@ -494,6 +533,9 @@ def ensure_nonexist(f):
     return f
 
 def ensure_path_exists(path):
+    '''
+    ensure the path exists.
+    '''
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f'Path {path} does not exist!')
@@ -522,39 +564,72 @@ def quickmd5(f):
     return f"{file_size}_{hasher.hexdigest()}" # this way is more readable than just return the hexdigest.
 
 def move_or_delete_duplicate(src, dst, verbose=True, conflict='error'):
-        if not src.exists():
-            raise FileNotFoundError(f"The source file {src} does not exist.")
-        if src == dst:
-            raise ValueError(f"Source and destination are the same: {src}")
-        if dst.exists():
-            if quickmd5(dst) == quickmd5(src):
-                print(f'[W] {src.name} is a duplicate. Remove.')
-                src.unlink()
+    """
+    Move or delete a file if it is a duplicate.
+
+    Args:
+        src (str): The path to the source file.
+        dst (str): The path to the destination file.
+        verbose (bool, optional): Whether to print verbose output. Defaults to True.
+        conflict (str, optional): The conflict resolution strategy. Can be one of 'error', 'skip', or 'rename'.
+                                 Defaults to 'error'.
+
+    Raises:
+        FileNotFoundError: If the source file does not exist.
+        ValueError: If the source and destination paths are the same.
+        FileExistsError: If the destination file already exists and the conflict resolution strategy is 'error'.
+
+    Returns:
+        None
+    """
+    if not src.exists():
+        raise FileNotFoundError(f"The source file {src} does not exist.")
+    if src == dst:
+        raise ValueError(f"Source and destination are the same: {src}")
+    if dst.exists():
+        if quickmd5(dst) == quickmd5(src):
+            print(f'[W] {src.name} is a duplicate. Remove.')
+            src.unlink()
+            return
+        else:
+            if conflict == 'skip':
+                print(f'[W] Destination file {src.name} already exists and hash does not match. Skip.')
                 return
-            else:
-                if conflict == 'skip':
-                    print(f'[W] Destination file {src.name} already exists and hash does not match. Skip.')
-                    return
-                elif conflict == 'error':
-                    raise FileExistsError(f"Destination file {dst} already exists.")
-                elif conflict == 'rename':
-                    dst = ensure_nonexist(dst)
-                    print(f'[W] Destination file {src.name} already exists. Use filename {dst.name} instead.')
-        if verbose:
-            if src.parent == dst.parent:
-                print(f"Rename {src.name} to {dst.name}")
-            elif src.name == dst.name:
-                print(f'Move {src.name} into {dst.parent}')
-            else:
-                print(f'Move {src.name} to {dst}')
-        shutil.move(src, dst)
+            elif conflict == 'error':
+                raise FileExistsError(f"Destination file {dst} already exists.")
+            elif conflict == 'rename':
+                dst = ensure_nonexist(dst)
+                print(f'[W] Destination file {src.name} already exists. Use filename {dst.name} instead.')
+    if verbose:
+        if src.parent == dst.parent:
+            print(f"Rename {src.name} to {dst.name}")
+        elif src.name == dst.name:
+            print(f'Move {src.name} into {dst.parent}')
+        else:
+            print(f'Move {src.name} to {dst}')
+    shutil.move(src, dst)
 
 def batch_rename(renamings):
     """
-    Non-conflict batch rename.
-    renamings: list of (Path object, newname)
-    """
+    Batch rename files without conflicts.
 
+    Args:
+        renamings (list): A list of tuples containing the original file paths and the new names.
+
+    Returns:
+        None
+
+    Raises:
+        None
+
+    This function renames multiple files simultaneously without causing conflicts. It checks for duplicate files
+    in the list, duplicate new filenames, and conflicts with existing files. If any conflicts are detected, the
+    function prints an error message and aborts the renaming process.
+
+    Example usage:
+        renamings = [(Path('file1.txt'), 'new_file1.txt'), (Path('file2.txt'), 'new_file2.txt')]
+        batch_rename(renamings)
+    """
     files = [f for f, _ in renamings]
     dst_files = [f.with_name(name) for f, name in renamings]
 
@@ -584,13 +659,26 @@ def batch_rename(renamings):
         f.rename(f.with_name(name))
 
 # ==================== network related ====================
-# Modified from https://www.peterbe.com/plog/best-practice-with-retries-with-requests
 def requests_retry_session(
     retries=5,
     backoff_factor=0.2,
     status_forcelist=(502, 503, 504),
     session=None,
 ):
+    """
+    Create a session object with retry functionality for making HTTP requests.
+    Modified from https://www.peterbe.com/plog/best-practice-with-retries-with-requests
+
+    Args:
+        retries (int): The maximum number of retries for each request. Default is 5.
+        backoff_factor (float): The backoff factor between retries. Default is 0.2.
+        status_forcelist (tuple): A tuple of HTTP status codes that should trigger a retry. Default is (502, 503, 504).
+        session (requests.Session): An existing session object to use. If not provided, a new session will be created.
+
+    Returns:
+        requests.Session: The session object with retry functionality.
+
+    """
     # pip install requests urllib3
     import requests
     from requests.adapters import HTTPAdapter
@@ -608,7 +696,29 @@ def requests_retry_session(
     return session
 
 def get(url, headers=None, cookies=None, encoding=None, session=None, parser='lxml', timeout=None):
-    # pip install requests lxml beautifulsoup4
+    """
+    Sends a GET request to the specified URL and returns the parsed HTML content.
+
+    Args:
+        url (str): The URL to send the GET request to.
+        headers (dict, optional): The headers to include in the request. Defaults to None.
+        cookies (dict, optional): The cookies to include in the request. Defaults to None.
+        encoding (str, optional): The encoding to use when parsing the HTML content. Defaults to None.
+        session (requests.Session, optional): The session to use for the request. Defaults to None.
+        parser (str, optional): The parser to use for parsing the HTML content. Defaults to 'lxml'.
+        timeout (float, optional): The maximum number of seconds to wait for the request to complete. Defaults to None.
+
+    Returns:
+        BeautifulSoup: The parsed HTML content.
+
+    Raises:
+        Any exceptions raised by the underlying requests library.
+
+    Dependencies:
+        - requests
+        - lxml
+        - beautifulsoup4
+    """
     from bs4 import BeautifulSoup
 
     if not session:
@@ -622,6 +732,27 @@ def get(url, headers=None, cookies=None, encoding=None, session=None, parser='lx
 def get_webname(url):
     return unquote(url.split('?')[0].split('/')[-1])
 
+def load_cookie(s):
+    """
+    Load cookies from various sources and convert them to a `RequestsCookieJar` object.
+
+    Args:
+        s (str): The input string, file path containing the cookies, or "{browser_name}/{domain_name}" to load cookies from a browser.
+
+    Returns:
+        requests.cookies.RequestsCookieJar: The converted `RequestsCookieJar` object.
+
+    Raises:
+        ValueError: If the input string is invalid.
+
+    Examples:
+        >>> load_cookie('cookie1=value1; cookie2=value2')
+        <RequestsCookieJar[Cookie(version=0, name='cookie1', value='value1', port=None, port_specified=False, domain='', domain_specified=False, domain_initial_dot=False, path='/', path_specified=False, secure=False, expires=None, discard=True, comment=None, comment_url=None, rest={'HttpOnly': None}, rfc2109=False), Cookie(version=0, name='cookie2', value='value2', port=None, port_specified=False, domain='', domain_specified=False, domain_initial_dot=False, path='/', path_specified=False, secure=False, expires=None, discard=True, comment=None, comment_url=None, rest={'HttpOnly': None}, rfc2109=False)]>
+
+        >>> load_cookie('/path/to/cookies.txt')
+        <RequestsCookieJar[Cookie(version=0, name='cookie1', value='value1', port=None, port_specified=False, domain='example.com', domain_specified=False, domain_initial_dot=False, path='/', path_specified=False, secure=False, expires=None, discard=True, comment=None, comment_url=None, rest={'HttpOnly': None}, rfc2109=False), Cookie(version=0, name='cookie2', value='value2', port=None, port_specified=False, domain='example.com', domain_specified=False, domain_initial_dot=False, path='/', path_specified=False, secure=False, expires=None, discard=True, comment=None, comment_url=None, rest={'HttpOnly': None}, rfc2109=False)]>
+    """
+    # Function implementation goes here
 def load_cookie(s):
     from http.cookiejar import MozillaCookieJar
     from requests.cookies import RequestsCookieJar, create_cookie
@@ -669,10 +800,33 @@ def load_cookie(s):
 
     raise ValueError(f'Invalid cookie string: {s}')
 
-
 def download(url, filename=None, save_path='.', cookies=None, session=None, dry_run=False,
              dupe='skip_same_size', referer=None, headers=None, placeholder=True, prefix='',
              get_suffix=True, verbose=2, retry_failed=True):
+    """
+    Downloads a file from the given URL and saves it to the specified location.
+
+    Args:
+        url (str): The URL of the file to download.
+        filename (str, optional): The name of the file to save. If not provided, the filename will be extracted from the URL or the response header. Defaults to None.
+        save_path (str, optional): The directory path to save the file. Defaults to '.' (current directory).
+        cookies (dict, optional): A dictionary of cookies to include in the request. Defaults to None.
+        session (requests.Session, optional): A requests Session object to use for the request. Defaults to None.
+        dry_run (bool, optional): If True, only prints the URL and does not perform the actual download. Defaults to False.
+        dupe (str, optional): The method to handle duplicate files. Must be one of 'skip', 'overwrite', 'rename', or 'skip_same_size'. Defaults to 'skip_same_size'.
+        referer (str, optional): The referer header to include in the request. Defaults to None.
+        headers (dict, optional): Additional headers to include in the request. Defaults to None.
+        placeholder (bool, optional): If True, creates a placeholder file with a '.broken' extension if the download fails. Defaults to True.
+        prefix (str, optional): A prefix to add to the filename. Useful when fetching the filename from the response headers. Defaults to ''.
+        get_suffix (bool, optional): If True, attempts to determine the file extension from the response headers. Defaults to True.
+        verbose (int, optional): The verbosity level of the download progress. Must be 0, 1, or 2. Defaults to 2.
+        retry_failed (bool, optional): If True, retries the download if it fails. Defaults to True.
+
+    Returns:
+        str: The status of the download. Can be 'Dry run', 'Exists', or the HTTP status code if the download fails.
+    """
+    # Rest of the code...
+
     from cgi import parse_header
     from mimetypes import guess_extension
 
