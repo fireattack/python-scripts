@@ -322,7 +322,7 @@ def parse_to_shortdate(date_str, fmt=None):
         return date_str.strftime(fmt)
 
     date_str = re.sub(r'[\s　]+', ' ', date_str).strip()
-    patterns = [r'(\d+)年 *(\d+)月 *(\d+)日', r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})']
+    patterns = [r'(\d+)年 *(\d+)月 *(\d+)日', r'(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})']
     for pattern in patterns:
         if m := re.search(pattern, date_str):
             date_str = m[1] + m[2].zfill(2) + m[3].zfill(2)
@@ -752,8 +752,6 @@ def load_cookie(s):
         >>> load_cookie('/path/to/cookies.txt')
         <RequestsCookieJar[Cookie(version=0, name='cookie1', value='value1', port=None, port_specified=False, domain='example.com', domain_specified=False, domain_initial_dot=False, path='/', path_specified=False, secure=False, expires=None, discard=True, comment=None, comment_url=None, rest={'HttpOnly': None}, rfc2109=False), Cookie(version=0, name='cookie2', value='value2', port=None, port_specified=False, domain='example.com', domain_specified=False, domain_initial_dot=False, path='/', path_specified=False, secure=False, expires=None, discard=True, comment=None, comment_url=None, rest={'HttpOnly': None}, rfc2109=False)]>
     """
-    # Function implementation goes here
-def load_cookie(s):
     from http.cookiejar import MozillaCookieJar
     from requests.cookies import RequestsCookieJar, create_cookie
     import browser_cookie3
@@ -823,13 +821,10 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
         retry_failed (bool, optional): If True, retries the download if it fails. Defaults to True.
 
     Returns:
-        str: The status of the download. Can be 'Dry run', 'Exists', or the HTTP status code if the download fails.
+        str: The status of the download. Can be 'Dry run', 'Exists', or the HTTP status code.
     """
-    # Rest of the code...
-
     from cgi import parse_header
     from mimetypes import guess_extension
-
     # it uses requests_retry_session, so
     # pip install requests
 
@@ -969,10 +964,14 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
     session = requests_retry_session(session=session)
     if headers:
         session.headers.update(headers)
+    if referer:
+        session.headers.update({'referer': referer})
+    if cookies:
+        session.cookies.update(cookies)
 
     f.parent.mkdir(parents=True, exist_ok=True)
 
-    r = session.get(url, headers={"referer": referer}, cookies=cookies, stream=True)
+    r = session.get(url, stream=True)
     if not r.status_code == 200:
         r.close()
         print(f'[Error] Get HTTP {r.status_code} from {url}.', 0)
@@ -1044,7 +1043,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
         retries = 1
         while retries < 5:
             print(f'[Warning] file size does not match (expected: {expected_size}, actual: {downloaded_size}). Retry {retries}', 1)
-            with session.get(url, headers={"referer": referer}, cookies=cookies) as r2:
+            with session.get(url) as r2:
                 actually_download(temp_file, r2)
             downloaded_size = temp_file.stat().st_size
             if downloaded_size == expected_size:
