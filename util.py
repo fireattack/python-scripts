@@ -16,7 +16,7 @@ from urllib.parse import unquote
 # to install them all, you can do:
 # pip install requests lxml beautifulsoup4 python-dateutil pytz pyperclip wcwidth rich browser_cookie3
 
-# # ==================== CONSTANTS ====================
+# ==================== CONSTANTS ====================
 
 '''Twitter media name handle
 The filename format I use, inherited from good old twMediaDownloader (RIP: here is a mirror: https://github.com/fireattack/twMediaDownloader).
@@ -479,6 +479,50 @@ def load_json(filename, encoding='utf-8'):
         data = json.load(f)
     return data
 
+def dump_html(soup, filename='temp.html', encoding='utf-8'):
+    """
+    Dump the contents of a BeautifulSoup object to an HTML file.
+
+    Args:
+        soup (BeautifulSoup): The BeautifulSoup object containing the HTML content.
+        filename (str, optional): The name of the output file. Defaults to 'temp.html'.
+        encoding (str, optional): The encoding to use when writing the file. Defaults to 'utf-8'.
+    """
+    filename = Path(filename)
+    filename.parent.mkdir(parents=True, exist_ok=True)
+    with filename.open('w', encoding=encoding) as f:
+        f.write(str(soup))
+
+def dump_tsv(data, filename='temp.tsv', verbose=True, print_header=False):
+    """
+    Dump data into a TSV (Tab-Separated Values) file.
+
+    Args:
+        data (list): The data to be dumped. It can be a list of lists or a list of dictionaries.
+        filename (str, optional): The name of the output file. Defaults to 'temp.tsv'.
+        verbose (bool, optional): Whether to print the content of the TSV file. Defaults to True.
+        print_header (bool, optional): Whether to print the header in the TSV file. Defaults to False.
+    """
+    s = ''
+    if isinstance(data[0], dict):
+        headers = data[0].keys()
+        if print_header:
+            s += '\t'.join(headers) + '\n'
+        for row in data:
+            s += '\t'.join([str(row[h]) for h in headers]) + '\n'
+    else:
+        if print_header:
+            print('[W] No header provided. Use default header [0, 1, 2, ...]')
+            s += '\t'.join([str(i) for i in range(len(data[0]))]) + '\n'
+        for row in data:
+            s += '\t'.join([str(i) for i in row]) + '\n'
+    if verbose:
+        print(s)
+    filename = Path(filename)
+    filename.parent.mkdir(parents=True, exist_ok=True)
+    filename.write_text(s, encoding='utf8')
+
+
 def get_files(directory, recursive=False, file_filter=None, path_filter=None):
     '''filter(s): true means include, false means exclude'''
     directory = Path(directory)
@@ -582,6 +626,7 @@ def move_or_delete_duplicate(src, dst, verbose=True, conflict='error'):
     Returns:
         None
     """
+
     if not src.exists():
         raise FileNotFoundError(f"The source file {src} does not exist.")
     if src == dst:
@@ -593,7 +638,7 @@ def move_or_delete_duplicate(src, dst, verbose=True, conflict='error'):
             return
         else:
             if conflict == 'skip':
-                print(f'[W] Destination file {src.name} already exists and hash does not match. Skip.')
+                print(f'[W] Destination file {dst} already exists and hash does not match. Skip.')
                 return
             elif conflict == 'error':
                 raise FileExistsError(f"Destination file {dst} already exists.")
