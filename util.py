@@ -479,7 +479,7 @@ def load_json(filename, encoding='utf-8'):
         data = json.load(f)
     return data
 
-def dump_html(soup, filename='temp.html', encoding='utf-8'):
+def dump_html(soup, filename='temp.html', encoding='utf-8', prettify=True):
     """
     Dump the contents of a BeautifulSoup object to an HTML file.
 
@@ -487,11 +487,16 @@ def dump_html(soup, filename='temp.html', encoding='utf-8'):
         soup (BeautifulSoup): The BeautifulSoup object containing the HTML content.
         filename (str, optional): The name of the output file. Defaults to 'temp.html'.
         encoding (str, optional): The encoding to use when writing the file. Defaults to 'utf-8'.
+        prettify (bool, optional): Whether to prettify the HTML content. Defaults to True.
     """
     filename = Path(filename)
     filename.parent.mkdir(parents=True, exist_ok=True)
+    if prettify:
+        text = soup.prettify()
+    else:
+        text = str(soup)
     with filename.open('w', encoding=encoding) as f:
-        f.write(str(soup))
+        f.write(text)
 
 def dump_tsv(data, filename='temp.tsv', verbose=True, print_header=False):
     """
