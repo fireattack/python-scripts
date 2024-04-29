@@ -12,39 +12,6 @@ Usage:
 oricon.py https://www.oricon.co.jp/news/2236438/
 ```
 
-## `scraper_lineblog.py`
-
-[LINE BLOG](https://www.lineblog.me/) downloader. Download both images and text.
-
-Usage:
-
-CLI:
-
-```
-usage: scraper_lineblog.py [-h] [--output OUTPUT] [--start START] [--until UNTIL] [--threads THREADS] user_id
-
-Download LINE BLOG articles (text and images).
-
-positional arguments:
-  user_id               LINE BLOG user id
-
-options:
-  -h, --help            show this help message and exit
-  --output OUTPUT, -o OUTPUT
-                        folder to save files (default: {CWD}/{user_id})
-  --start START         download starting from this page (inclusive) (default: 1)
-  --until UNTIL         download until this page (inclusive) (default: None (download to the last page)
-  --threads THREADS, --thread THREADS
-                        download threads (default: 20)
-```
-As Python module:
-
-```python
-from scraper_lineblog import main
-
-main('user_id', save_folder='.')
-```
-
 ## `scraper_ameblo_api.py`
 
 [Ameblo](https://ameblo.jp/) (アメーバブログ or アメブロ, Japanese blog service) downloader. Supports images and text.
@@ -136,16 +103,17 @@ npm i minyami -g
 CLI:
 
 ```
-usage: nico.py [-h] [--info] [--verbose] [--thumb] [--cookies COOKIES] [--comments {yes,no,only}] url
+usage: nico.py [-h] [--verbose] [--info] [--dump] [--thumb] [--cookies COOKIES] [--comments {yes,no,only}] [--proxy PROXY] [--save-dir SAVE_DIR] [--reserve] url
 
 positional arguments:
   url                   URL or ID of nicovideo webpage
 
 options:
   -h, --help            show this help message and exit
+  --verbose, -v         Print verbose info for debugging.
   --info, -i            Print info only.
-  --verbose             Print more info.
-  --thumb               Download thumbnail only. Only works for video type (not live).
+  --dump                Dump all the metadata to json files.
+  --thumb               Download thumbnail only. Only works for video type (not live type).
   --cookies COOKIES, -c COOKIES
                         Cookie source. [Default: chrome]
                         Provide either:
@@ -154,6 +122,10 @@ options:
                           - A Netscape-style cookie file.
   --comments {yes,no,only}, -d {yes,no,only}
                         Control if comments (danmaku) are downloaded. [Default: yes]
+  --proxy PROXY         Specify a proxy, "none", or "auto" (automatically detects system proxy settings). [Default: auto]
+  --save-dir SAVE_DIR, -o SAVE_DIR
+                        Specify the directory to save the downloaded files. [Default: current directory]
+  --reserve             Automatically reserve timeshift ticket if not reserved yet. [Default: no]
 ```
 
 ## `util.py`
