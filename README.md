@@ -2,6 +2,29 @@
 
 Some small Python utilities.
 
+## `instalive.py`
+
+Instagram live downloader. Feed in MPD URL (including all the query parameters!) within 24 hour and it can download the full live stream from the beginning.
+
+Usage:
+
+```
+usage: instalive.py [-h] [--action ACTION] [--dir DIR] [--debug] [--quality QUALITY] [-t TIME] [--range RANGE] url
+
+positional arguments:
+  url                   url of mpd
+
+options:
+  -h, --help            show this help message and exit
+  --action ACTION       action to perform (default: all)
+  --dir DIR, -d DIR     save path (default: CWD)
+  --debug               debug mode
+  --quality QUALITY, -q QUALITY
+                        manually assign video quality (default: auto)
+  -t TIME, --time TIME  manually assign last t (default: auto)
+  --range RANGE         manually assign range (start,end) for quick iterate test mode
+```
+
 ## `oricon.py`
 
 Quickly download all the highest quality pictures from any Oricon news, special or photo article.

@@ -512,9 +512,9 @@ def dump_tsv(data, filename='temp.tsv', verbose=True, print_header=False):
     if isinstance(data[0], dict):
         headers = data[0].keys()
         if print_header:
-            s += '\t'.join(headers) + '\n'
+            s += '\t'.join(str(h) for h in headers) + '\n'
         for row in data:
-            s += '\t'.join([str(row[h]) for h in headers]) + '\n'
+            s += '\t'.join([str(row.get(h, '')) for h in headers]) + '\n'
     else:
         if print_header:
             print('[W] No header provided. Use default header [0, 1, 2, ...]')
@@ -1011,7 +1011,10 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
             if not (f := check_dupe(f)):
                 return 'Exists'
 
-    session = requests_retry_session(session=session)
+    # creating a new session is extremely expansive, so only do so
+    # if the user does not supply a session.
+    if not session:
+        session = requests_retry_session()
     if headers:
         session.headers.update(headers)
     if referer:
