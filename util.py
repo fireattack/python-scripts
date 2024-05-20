@@ -166,6 +166,13 @@ class Table():
         else:
             return []
 
+    def sort(self, header_name_or_index, reverse=False):
+        if isinstance(header_name_or_index, int):
+            col_idx = header_name_or_index
+        else:
+            col_idx = self.headers.index(header_name_or_index)
+        self.data.sort(key=lambda x: x[col_idx], reverse=reverse)
+
     def append(self, new_data):
         d = [''] * len(self.headers)
         for key, value in new_data.items():

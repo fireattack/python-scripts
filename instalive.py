@@ -499,14 +499,33 @@ def main(url, save_path, time, debug, action, quality):
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser()
+
+    class CustomHelpFormatter(argparse.RawTextHelpFormatter):
+        pass
+
+    parser = argparse.ArgumentParser(
+        description='Available actions:\n'
+                    '  all      - Download both video and audio, and merge them (default)\n'
+                    '  live     - Download the live stream only\n'
+                    '  video    - Download video only\n'
+                    '  audio    - Download audio only\n'
+                    '  merge    - Merge downloaded video and audio\n'
+                    '  check    - Check the downloaded segments to make sure there is no missing segments\n'
+                    '  manual   - Manually process a specified range (used together with --range)\n'
+                    '  info     - Display downloader object info\n'
+                    '  import:<path> - Import segments downloaded via N_m3u8DL-RE from a given path',
+        formatter_class=CustomHelpFormatter
+    )
+
+
     parser.add_argument("url", help="url of mpd")
-    parser.add_argument("--action", default='all', help="action to perform (default: all)")
+    parser.add_argument("--action", '-a', default='all', help="action to perform (default: all)")
     parser.add_argument("--dir", "-d", default='.', help="save path (default: CWD)")
     parser.add_argument("--debug", action='store_true', help="debug mode")
     parser.add_argument("--quality", "-q", help="manually assign video quality (default: auto)")
-    parser.add_argument("-t", "--time", help="manually assign last t (default: auto)")
+    parser.add_argument("--time", "-t", help="manually assign last t (default: auto)")
     parser.add_argument('--range', help='manually assign range (start,end) for quick iterate test mode')
+
     args = parser.parse_args()
 
     main(args.url, args.dir, args.time, args.debug, args.action, args.quality)

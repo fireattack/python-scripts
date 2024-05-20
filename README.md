@@ -9,19 +9,31 @@ Instagram live downloader. Feed in MPD URL (including all the query parameters!)
 Usage:
 
 ```
-usage: instalive.py [-h] [--action ACTION] [--dir DIR] [--debug] [--quality QUALITY] [-t TIME] [--range RANGE] url
+usage: instalive.py [-h] [--action ACTION] [--dir DIR] [--debug] [--quality QUALITY] [--time TIME] [--range RANGE] url
+
+Available actions:
+  all      - Download both video and audio, and merge them (default)
+  live     - Download the live stream only
+  video    - Download video only
+  audio    - Download audio only
+  merge    - Merge downloaded video and audio
+  check    - Check the downloaded segments to make sure there is no missing segments
+  manual   - Manually process a specified range (used together with --range)
+  info     - Display downloader object info
+  import:<path> - Import segments downloaded via N_m3u8DL-RE from a given path
 
 positional arguments:
   url                   url of mpd
 
 options:
   -h, --help            show this help message and exit
-  --action ACTION       action to perform (default: all)
+  --action ACTION, -a ACTION
+                        action to perform (default: all)
   --dir DIR, -d DIR     save path (default: CWD)
   --debug               debug mode
   --quality QUALITY, -q QUALITY
                         manually assign video quality (default: auto)
-  -t TIME, --time TIME  manually assign last t (default: auto)
+  --time TIME, -t TIME  manually assign last t (default: auto)
   --range RANGE         manually assign range (start,end) for quick iterate test mode
 ```
 
