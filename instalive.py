@@ -103,8 +103,9 @@ class InstaliveDownloader:
         print('Save mpd to local file...')
         (self.save_path/'mpd.mpd').write_text(self.mpd_text, encoding='utf-8')
 
-    def fetch_mpd(self):
-        print('Fetch mpd...')
+    def fetch_mpd(self, mute=False):
+        if not mute:
+            print('Fetch mpd...')
         self.mpd_text = self.session.get(self.url).text
         self.mpd = ET.fromstring(self.mpd_text)
         return self.mpd
@@ -184,12 +185,12 @@ class InstaliveDownloader:
         assert r in [200, 'Exists']
 
     def _get_segments(self):
-        mpd = self.fetch_mpd() # fetch a new mpd to get the latest segments
+        mpd = self.fetch_mpd(mute=True) # fetch a new mpd to get the latest segments
         video_representation = mpd[0][0][self.video_index]
         assert video_representation.attrib['id'] == self.video_id
         timeline = video_representation[0][0]
         segments = [int(timeline[i].attrib['t']) for i in range(len(timeline))]
-        return segments
+        return segments, mpd
 
     def manually_set(self, last_t=None):
         if last_t is not None:
@@ -244,21 +245,28 @@ class InstaliveDownloader:
             or parse_iso8601_duration(mpd.attrib.get('timeShiftBufferDepth', 'PT0S')) // 2 - 1
         fetch_interval = max(fetch_interval, 2)
 
-        unchange_count = 0
+        MAX_IDLE_COUNT = 20
+
+        unchanged_mpd_count = 0
         while True:
-            new_segments = self._get_segments()
+            new_segments, mpd = self._get_segments()
             if all(id in downloaded for id in new_segments):
-                unchange_count += 1
-            if unchange_count >= 5:
-                print('All segments are downloaded. Stop.')
-                break
-            for id in new_segments:
-                if id in downloaded:
-                    continue
-                # singe-thread should be enough for live stream
-                self.fetch_video_by_id(id)
-                self.fetch_audio_by_id(id)
-                downloaded.add(id)
+                unchanged_mpd_count += 1
+                if unchanged_mpd_count >= MAX_IDLE_COUNT:
+                    if mpd.attrib.get('type') == 'dynamic':
+                        print(f'No new segments found in the last {MAX_IDLE_COUNT} checks. But the mpd is still dynamic. Continue monitoring...')
+                    else:
+                        print('All segments are downloaded. Stop.')
+                        return
+            else:
+                undownloaded = [id for id in new_segments if id not in downloaded]
+                print(f'{len(undownloaded)} new segments found. Downloading...')
+                for id in undownloaded:
+                    # singe-thread should be enough for live stream
+                    self.fetch_video_by_id(id)
+                    self.fetch_audio_by_id(id)
+                    downloaded.add(id)
+
             time.sleep(fetch_interval)
 
     def download_video(self, forward=False):
@@ -489,9 +497,13 @@ def main(url, save_path, time, debug, action, quality):
                     return
                 start = worst[0] + 1
                 end = worst[1] - 1
-                print(f'automatically largest interval, between {start} and {end} (inclusive)')
+                print(f'Automatically check the largest interval, between {start} and {end} (inclusive)')
             ids = list(range(start, end + 1)) if start < end else list(range(start, end - 1, -1))
-            downloader.quick_iterate(ids)
+            id, status = downloader.quick_iterate(ids)
+            if not id:
+                print('No segment found in this range.')
+            else:
+                print(f'Found segment {id} with status {status}')
 
     except KeyboardInterrupt:
         print('\nInterrupted by user. Stop.')
