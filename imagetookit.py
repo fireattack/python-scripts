@@ -15,7 +15,9 @@ def trim_image(img):
     return trimmed
 
 
-def make_text_image(text, width, height, inital_fontsize=12, background_color=(0, 0, 0), font=None):
+def make_text_image(text, width, height, inital_fontsize=12,
+                    background_color='white', font=None, font_fill_color="black",
+                    stroke=False, font_stroke_color="black"):
     if font is None:
         source_sans = Path(__file__).parent / 'SourceHanSans-Regular.otf'
         if source_sans.exists():
@@ -23,7 +25,8 @@ def make_text_image(text, width, height, inital_fontsize=12, background_color=(0
         else:
             font = 'msyh.ttc' # fallback
 
-    stroke_width = max(inital_fontsize//25, 1)
+    if stroke:
+        stroke_width = max(inital_fontsize//25, 1)
 
     img = Image.new('RGB', (width, height), background_color)
     draw = ImageDraw.Draw(img)
@@ -36,8 +39,10 @@ def make_text_image(text, width, height, inital_fontsize=12, background_color=(0
             fontsize -= 1
         else:
             break
-
-    draw.text(((width // 2, height // 2)), text, fill="white", font=font_obj, stroke_fill='black', stroke_width=stroke_width, anchor="mm", align="center")
+    if stroke:
+        draw.text(((width // 2, height // 2)), text, fill=font_fill_color, font=font_obj, stroke_fill=font_stroke_color, stroke_width=stroke_width, anchor="mm", align="center")
+    else:
+        draw.text(((width // 2, height // 2)), text, fill=font_fill_color, font=font_obj, anchor="mm", align="center")
     return img
 
 
