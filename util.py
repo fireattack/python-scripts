@@ -284,21 +284,25 @@ def compare_obj(value_old, value, print_prefix='ROOT', mute=False):
     elif isinstance(value, dict):
         for key, v in value.items():
             if key not in value_old:
+                equal = False
                 print(f'{print_prefix}.{key}: [green]Added:[/green]', v)
             else:
                 v_old = value_old[key]
                 equal &= compare_obj(v_old, v, print_prefix=f'{print_prefix}.{key}', mute=mute)
         for key, v in value_old.items():
             if key not in value:
+                equal = False
                 print(f'{print_prefix}.{key}: [red]Removed:[/red]', v)
         return equal
     elif isinstance(value, list):
         for i in range(min(len(value), len(value_old))):
             equal &= compare_obj(value_old[i], value[i], print_prefix=f'{print_prefix}[{i}]', mute=mute)
         if len(value_old) < len(value):
+            equal = False
             for i in range(len(value_old), len(value)):
                 print(f'{print_prefix}[{i}]: [green]Added:[/green]', value[i])
         elif len(value_old) > len(value):
+            equal = False
             for i in range(len(value), len(value_old)):
                 print(f'{print_prefix}[{i}]: [red]Removed:[/red]',value_old[i])
         return equal
@@ -574,10 +578,9 @@ def ensure_nonexist(f):
     '''
     Ensure the file does not exist. If it does, rename it to filename_2, filename_3, etc.
     '''
-
     i = 2
     stem = f.stem
-    if m:= re.search(r'^(.+?)_(\d)$', stem):
+    if m := re.search(r'^(.+?)_(\d)$', stem):
         # only do so if for i < 10 and has no padding.
         # so things like file_01, file_1986 etc. won't be renamed to confusing file_2, file_1987 etc.
         if int(m[2]) < 10 and len(m[2]) == 1:
@@ -966,9 +969,10 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                 # Therefore, we have to repeat it here.
                 i = 2
                 stem = f.stem
-                if m:= re.search(r'^(.+?)_(\d+)$', stem):
-                    stem = m[1]
-                    i = int(m[2]) + 1
+                if m := re.search(r'^(.+?)_(\d+)$', stem):
+                    if int(m[2]) < 10 and len(m[2]) == 1:
+                        stem = m[1]
+                        i = int(m[2]) + 1
                 while f.exists():
                     existing_size = f.stat().st_size
                     if size == existing_size:
