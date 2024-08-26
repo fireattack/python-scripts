@@ -260,16 +260,19 @@ class NicoDownloader():
             result =  ws.recv()
             verbose and print("Received '%s'" % result)
             data = json.loads(result)
-            if data['type'] == 'room':
-                room_info = data
-                if comments in ['yes', 'only']:
-                    ex.submit(self.download_comments, room_info, end_time_epoch, filename)
-            elif data['type'] == 'stream':
+            if data['type'] == 'stream':
                 stream_info = data
-            # just grab all the info even if we don't need it, it doesn't save any time anyway.
-            if room_info and stream_info:
-                print('Got all the info we needed. Close WS.')
                 break
+            # if data['type'] == 'room':
+            #     room_info = data
+            #     if comments in ['yes', 'only']:
+            #         ex.submit(self.download_comments, room_info, end_time_epoch, filename)
+            # elif data['type'] == 'stream':
+            #     stream_info = data
+            # # just grab all the info even if we don't need it, it doesn't save any time anyway.
+            # if room_info and stream_info:
+            #     print('Got all the info we needed. Close WS.')
+            #     break
         ws.close()
 
         if dump:
