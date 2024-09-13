@@ -7,7 +7,6 @@ from urllib.parse import urljoin, urlparse
 from urllib.request import getproxies
 from pathlib import Path
 
-import browser_cookie3
 import websocket
 from rich.console import Console
 from rich.table import Table
@@ -28,18 +27,10 @@ class NicoDownloader():
             else:
                 print(f'WARN: Cannot find user_session in cookie. You\'re probably not logged in.')
                 # exit(1) # make it non-fatal
-
-        if cookies.lower() in ['chrome', 'firefox', 'edge']:
-            print(f'Fetching cookies from browser {cookies}...')
-            cookies = cookies.lower()
-            if cookies == 'chrome':
-                cookies = browser_cookie3.chrome(domain_name='.nicovideo.jp')
-            elif cookies == 'firefox':
-                cookies = browser_cookie3.firefox(domain_name='.nicovideo.jp')
-            elif cookies == 'edge':
-                cookies = browser_cookie3.edge(domain_name='.nicovideo.jp')
+        if isinstance(cookies, str) and cookies.lower() in ['chrome', 'firefox', 'edge']:
+            cookies = load_cookie(cookies + '/nicovideo.jp')
             validate_cookie(cookies)
-        elif cookies.startswith('user_session_'):
+        elif isinstance(cookies, str) and cookies.startswith('user_session_'):
             cookies = {'user_session': cookies}
         elif Path(cookies).exists():
             print(f'Loading cookies from file {cookies}...')
@@ -59,10 +50,10 @@ class NicoDownloader():
         elif proxy == 'auto':
             proxies = getproxies()
             if proxy := proxies.get('http'):
-                print(f'INFO: automatically use system proxy {proxy}')
-
+                print(f'INFO: Automatically use system proxy {proxy}')
         # I don't think system proxy would be missing scheme, but just in case
         if proxy and '://' not in proxy:
+            print('WARN: Proxy is missing scheme. Assuming http://')
             proxy = f'http://{proxy}'
 
         self.session.proxies = {'http': proxy, 'https': proxy}
@@ -253,7 +244,8 @@ class NicoDownloader():
         room_info = None
         stream_info = None
 
-        ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        #TODO: fix danmaku downloading with the new method
+        # ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
         while True:
             verbose and print("Receiving...")
@@ -263,6 +255,7 @@ class NicoDownloader():
             if data['type'] == 'stream':
                 stream_info = data
                 break
+            #TODO: danmaku downloading is temporarily disabled until the new method is implemented
             # if data['type'] == 'room':
             #     room_info = data
             #     if comments in ['yes', 'only']:
@@ -315,7 +308,8 @@ class NicoDownloader():
         print('CMD is:')
         print(cmd)
         run(cmd, shell=True)
-        ex.shutdown(wait=True) # ensure download_comments is finished
+        # TODO: fix danmaku downloading with the new method
+        # ex.shutdown(wait=True) # ensure download_comments is finished
 
         return_value.update({
             'master_m3u8_url': master_m3u8_url,

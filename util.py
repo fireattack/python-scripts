@@ -14,7 +14,7 @@ from urllib.parse import unquote
 # so we can use this file in other projects without installing them.
 # or to copy and paste the functions to other public projects directly.
 # to install them all, you can do:
-# pip install requests lxml beautifulsoup4 python-dateutil pytz pyperclip wcwidth rich browser_cookie3
+# pip install requests lxml beautifulsoup4 python-dateutil pytz pyperclip wcwidth rich rookiepy
 
 # ==================== CONSTANTS ====================
 
@@ -247,6 +247,23 @@ class Table():
         for row in self.data:
             s += '\t'.join([str(cell) for cell in row]) + '\n'
         f.write_text(s, encoding='utf8')
+
+def multi_col_print(data, columns=5):
+    '''Print a list of data in a table with columns'''
+    from rich.console import Console
+    from rich.table import Table
+
+    table = Table(show_header=False, box=None)
+    for _ in range(columns):
+        table.add_column(style='cyan')
+    # add data to table vertically
+    row_count = len(data) // columns + 1
+    for i in range(row_count):
+        row = data[i::row_count]
+        table.add_row(*row)
+
+    console = Console()
+    console.print(table)
 
 def array_to_range_text(a, sep=', ', dash='-'):
     s = ''
@@ -815,7 +832,8 @@ def load_cookie(s):
     from http.cookiejar import MozillaCookieJar
     from requests.cookies import RequestsCookieJar, create_cookie
     import browser_cookie3
-    # pip install browser_cookie3
+    import rookiepy
+    # pip install browser_cookie3 rookiepy
 
     def convert(cj):
         cookies = RequestsCookieJar()
@@ -833,14 +851,22 @@ def load_cookie(s):
         return cookies
 
     if m := re.search(r'^(chrome|firefox|edge)(/.+)?', str(s), re.IGNORECASE):
-        domain_name = m[2].lstrip('/') if m[2] else ""
+        # domain_name = m[2].lstrip('/') if m[2] else None
+        # if m[1] == 'chrome':
+        #     cj = browser_cookie3.chrome(domain_name=domain_name)
+        # elif m[1] == 'firefox':
+        #     cj = browser_cookie3.firefox(domain_name=domain_name)
+        # elif m[1] == 'edge':
+        #     cj = browser_cookie3.edge(domain_name=domain_name)
+        # return convert(cj)
+        domains = [m[2].lstrip('/')] if m[2] else None
         if m[1] == 'chrome':
-            cj = browser_cookie3.chrome(domain_name=domain_name)
+            rcookies = rookiepy.chrome(domains=domains)
         elif m[1] == 'firefox':
-            cj = browser_cookie3.firefox(domain_name=domain_name)
+            rcookies = rookiepy.firefox(domains=domains)
         elif m[1] == 'edge':
-            cj = browser_cookie3.edge(domain_name=domain_name)
-        return convert(cj)
+            rcookies = rookiepy.edge(domains=domains)
+        return convert(rookiepy.to_cookiejar(rcookies))
 
     if Path(s).exists():
         cj = MozillaCookieJar(s)
