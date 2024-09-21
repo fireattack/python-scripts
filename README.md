@@ -135,6 +135,11 @@ pip install browser-cookie3 websocket-client rich python-dateutil pytz requests 
 npm i minyami -g
 ```
 
+If you want to download comments, you need to install [NDGRClient](https://github.com/tsukumijima/NDGRClient), too.
+```
+pip install git+https://github.com/tsukumijima/NDGRClient
+```
+
 CLI:
 
 ```

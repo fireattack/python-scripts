@@ -86,63 +86,27 @@ class NicoDownloader():
         live_data = json.loads(soup.select_one('#embedded-data')['data-props'])
         return live_data
 
-    def download_comments(self, room_info, when, filename):
-        chats_all = []
-        url = room_info["data"]["messageServer"]["uri"]
-        thread_id = room_info["data"]["threadId"]
+    def download_comments(self, video_id, filename):
+        from ndgr_client import NDGRClient
+        import asyncio
 
-        ws = self.create_ws(url)
-        print(f'Start download comments from thread {thread_id}')
-        sending = True
-        while sending:
-            message = [
-                {"ping": {"content": "rs:0"}},
-                {"ping": {"content": "ps:0"}},
-                {
-                    "thread": {
-                        "thread": thread_id,
-                        "version": "20090904",
-                        "res_from": -1000,
-                        "when": when + 10
-                    }
-                },
-                {"ping": {"content": "pf:0"}},
-                {"ping": {"content": "rf:0"}}
-            ]
-            ws.send(json.dumps(message))
+        async def download(video_id, output, cookies, verbose=False):
+            ndgr_client = NDGRClient(video_id, verbose=verbose, console_output=True)
+            await ndgr_client.login(cookies=cookies)
 
-            first_chat = True
-            chats = []
-            while True:
-                result = ws.recv()
-                data = json.loads(result)
-                if "chat" in data:
-                    if first_chat:
-                        first_chat = False
-                        # if the date of chat does not change from last batch,
-                        # we assume we have fetched all the comments.
-                        if data["chat"]["date"] == when:
-                            sending = False
-                            break
-                        when = data["chat"]["date"]
-                    chats.append(data)
-                else:
-                    # reach the end of this batch
-                    if "ping" in data and 'rf' in data["ping"]["content"]:
-                        break
-            chats_all.extend(chats)
-        ws.close()
+            comments = await ndgr_client.downloadBackwardComments()
+            comments_count = len(comments)
 
-        # remove duplicate from chats_all
-        _ = []
-        for d in chats_all:
-            if d not in _:
-                _.append(d)
-        chats_all = _
-        chats_all.sort(key=lambda x: (x['chat']['date'], x['chat'].get('vpos', 0)))
+            with output.open(mode='w', encoding='utf-8') as f:
+                f.write('<?xml version="1.0" encoding="UTF-8"?>\n<packet>\n')
+                f.write(NDGRClient.convertToXMLString(comments))
+                f.write('\n</packet>\n')
+            print(f'Total comments for {video_id}: {comments_count}')
+            print(f'Saved to {output}.')
 
-        dump_json(chats_all, self.save_dir / f'{filename}.json')
-        print(f'Total unique comments: {len(chats_all)}. Saved to "{filename}.json".')
+        cookies = self.session.cookies.get_dict()
+        output = self.save_dir / f'{filename}.xml'
+        asyncio.run(download(video_id, output, cookies))
 
     def download_timeshift(self, url_or_video_id, info_only=False, comments='yes', verbose=False, dump=False, auto_reserve=False):
         video_id, url, video_type = self._parse_url_or_video_id(url_or_video_id)
@@ -244,9 +208,6 @@ class NicoDownloader():
         room_info = None
         stream_info = None
 
-        #TODO: fix danmaku downloading with the new method
-        # ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-
         while True:
             verbose and print("Receiving...")
             result =  ws.recv()
@@ -255,31 +216,24 @@ class NicoDownloader():
             if data['type'] == 'stream':
                 stream_info = data
                 break
-            #TODO: danmaku downloading is temporarily disabled until the new method is implemented
-            # if data['type'] == 'room':
-            #     room_info = data
-            #     if comments in ['yes', 'only']:
-            #         ex.submit(self.download_comments, room_info, end_time_epoch, filename)
-            # elif data['type'] == 'stream':
-            #     stream_info = data
-            # # just grab all the info even if we don't need it, it doesn't save any time anyway.
-            # if room_info and stream_info:
-            #     print('Got all the info we needed. Close WS.')
-            #     break
         ws.close()
 
         if dump:
             dump_json(room_info, self.save_dir / f'{filename}.roominfo.json')
             dump_json(stream_info, self.save_dir / f'{filename}.streaminfo.json')
-
         return_value.update({
             'room_info': room_info,
             'stream_info': stream_info
         })
 
+        ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        if comments in ['yes', 'only']:
+            print('Downloading comments...')
+            ex.submit(self.download_comments, video_id, filename)
+
         if comments == 'only':
             ex.shutdown(wait=True)
-            return_value['danmaku'] = self.save_dir / f'{filename}.json'
+            return_value['danmaku'] = self.save_dir / f'{filename}.xml'
             return return_value
 
         master_m3u8_url = stream_info['data']['uri']
@@ -300,6 +254,8 @@ class NicoDownloader():
         # See: https://stackoverflow.com/questions/74700723/
         # Make sure to also use shell=True for *nix systems
         output = self.save_dir / f'{filename}.ts'
+
+        # print(f'"{playlist_url}", "--key", "{audience_token},{max_quality}"') # a format that can be copied to launch.json
         cmd = f'minyami -d "{playlist_url}" --key {audience_token},{max_quality} -o "{output}"'
         if self.proxy:
              cmd += f' --proxy "{self.proxy}"'
@@ -308,8 +264,7 @@ class NicoDownloader():
         print('CMD is:')
         print(cmd)
         run(cmd, shell=True)
-        # TODO: fix danmaku downloading with the new method
-        # ex.shutdown(wait=True) # ensure download_comments is finished
+        ex.shutdown(wait=True) # ensure download_comments is finished
 
         return_value.update({
             'master_m3u8_url': master_m3u8_url,
@@ -357,7 +312,7 @@ if __name__ == "__main__":
     parser.add_argument('--dump', action='store_true', help='Dump all the metadata to json files.')
     parser.add_argument('--thumb', action='store_true', help='Download thumbnail only. Only works for video type (not live type).')
     parser.add_argument('--cookies', '-c', default='chrome', help='R|Cookie source. [Default: chrome]\nProvide either:\n  - A browser name to fetch from;\n  - The value of "user_session";\n  - A Netscape-style cookie file.')
-    parser.add_argument('--comments', '-d', default='yes', choices=['yes', 'no', 'only'], help='Control if comments (danmaku) are downloaded. [Default: yes]')
+    parser.add_argument('--comments', '-d', default='no', choices=['yes', 'no', 'only'], help='Control if comments (danmaku) are downloaded. [Default: yes]')
     parser.add_argument('--proxy', default='auto', help='Specify a proxy, "none", or "auto" (automatically detects system proxy settings). [Default: auto]')
     parser.add_argument('--save-dir', '-o', help='Specify the directory to save the downloaded files. [Default: current directory]')
     parser.add_argument('--reserve', action='store_true', help='Automatically reserve timeshift ticket if not reserved yet. [Default: no]')

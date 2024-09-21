@@ -831,7 +831,7 @@ def load_cookie(s):
     """
     from http.cookiejar import MozillaCookieJar
     from requests.cookies import RequestsCookieJar, create_cookie
-    import browser_cookie3
+    # import browser_cookie3
     import rookiepy
     # pip install browser_cookie3 rookiepy
 
