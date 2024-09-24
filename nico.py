@@ -86,9 +86,14 @@ class NicoDownloader():
         live_data = json.loads(soup.select_one('#embedded-data')['data-props'])
         return live_data
 
-    def download_comments(self, video_id, filename):
-        from ndgr_client import NDGRClient
+    def download_comments(self, video_id, output):
         import asyncio
+        try:
+            from ndgr_client import NDGRClient
+        except ImportError:
+            print('ERROR: Please install ndgr_client first.', style='bold red')
+            print('You can install it by running: "pip install git+https://github.com/tsukumijima/NDGRClient"')
+            return
 
         async def download(video_id, output, cookies, verbose=False):
             ndgr_client = NDGRClient(video_id, verbose=verbose, console_output=True)
@@ -105,7 +110,6 @@ class NicoDownloader():
             print(f'Saved to {output}.')
 
         cookies = self.session.cookies.get_dict()
-        output = self.save_dir / f'{filename}.xml'
         asyncio.run(download(video_id, output, cookies))
 
     def download_timeshift(self, url_or_video_id, info_only=False, comments='yes', verbose=False, dump=False, auto_reserve=False):
@@ -169,9 +173,10 @@ class NicoDownloader():
                 if auto_reserve or input('WARN: You do not have timeshift ticket. Do you want to reserve/activate it now? Y/[N] ').lower() == 'y':
                     print('Reserving...')
                     # POST = reserve, PATCH = activate/use
-                    r = self.session.post(f'https://live2.nicovideo.jp/api/v2/programs/{video_id}/timeshift/reservation')
+                    reservation_url = f'https://live2.nicovideo.jp/api/v2/programs/{video_id}/timeshift/reservation'
+                    r = self.session.post(reservation_url)
                     print('Tried POST, response:', r.status_code)
-                    r = self.session.patch(f'https://live2.nicovideo.jp/api/v2/programs/{video_id}/timeshift/reservation')
+                    r = self.session.patch(reservation_url)
                     print('Tried PATCH, response:', r.status_code)
                     if not r.status_code == 200:
                         print('Reserving or activating failed. Please try reserving it manually in the webpage.')
@@ -204,8 +209,24 @@ class NicoDownloader():
         # websocket.enableTrace(True)
         ws = self.create_ws(ws_url)
         verbose and print("Sent startWatching")
-        ws.send('{"type":"startWatching","data":{"stream":{"quality":"' + max_quality + '","protocol":"hls","latency":"low","chasePlay":false},"room":{"protocol":"webSocket","commentable":true},"reconnect":false}}')
-        room_info = None
+        start_watching_payload = {
+            "type": "startWatching",
+            "data": {
+            "stream": {
+                "quality": max_quality,
+                "protocol": "hls",
+                "latency": "low",
+                "chasePlay": False
+            },
+            "room": {
+                "protocol": "webSocket",
+                "commentable": True
+            },
+            "reconnect": False
+            }
+        }
+        verbose and print('Payload:', start_watching_payload)
+        ws.send(json.dumps(start_watching_payload))
         stream_info = None
 
         while True:
@@ -219,21 +240,20 @@ class NicoDownloader():
         ws.close()
 
         if dump:
-            dump_json(room_info, self.save_dir / f'{filename}.roominfo.json')
             dump_json(stream_info, self.save_dir / f'{filename}.streaminfo.json')
         return_value.update({
-            'room_info': room_info,
             'stream_info': stream_info
         })
 
         ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         if comments in ['yes', 'only']:
             print('Downloading comments...')
-            ex.submit(self.download_comments, video_id, filename)
+            danmaku_output = self.save_dir / f'{filename}.xml'
+            ex.submit(self.download_comments, video_id, danmaku_output)
 
         if comments == 'only':
             ex.shutdown(wait=True)
-            return_value['danmaku'] = self.save_dir / f'{filename}.xml'
+            return_value['danmaku'] = danmaku_output
             return return_value
 
         master_m3u8_url = stream_info['data']['uri']
@@ -270,7 +290,7 @@ class NicoDownloader():
             'master_m3u8_url': master_m3u8_url,
             'playlist_m3u8_url': playlist_url,
             'output': output,
-            'danmaku': self.save_dir / f'{filename}.json' if comments in ['yes', 'only'] else None
+            'danmaku': danmaku_output if comments in ['yes', 'only'] else None
         })
 
         return return_value
@@ -312,7 +332,7 @@ if __name__ == "__main__":
     parser.add_argument('--dump', action='store_true', help='Dump all the metadata to json files.')
     parser.add_argument('--thumb', action='store_true', help='Download thumbnail only. Only works for video type (not live type).')
     parser.add_argument('--cookies', '-c', default='chrome', help='R|Cookie source. [Default: chrome]\nProvide either:\n  - A browser name to fetch from;\n  - The value of "user_session";\n  - A Netscape-style cookie file.')
-    parser.add_argument('--comments', '-d', default='no', choices=['yes', 'no', 'only'], help='Control if comments (danmaku) are downloaded. [Default: yes]')
+    parser.add_argument('--comments', '-d', default='no', choices=['yes', 'no', 'only'], help='Control if comments (danmaku) are downloaded. [Default: no]')
     parser.add_argument('--proxy', default='auto', help='Specify a proxy, "none", or "auto" (automatically detects system proxy settings). [Default: auto]')
     parser.add_argument('--save-dir', '-o', help='Specify the directory to save the downloaded files. [Default: current directory]')
     parser.add_argument('--reserve', action='store_true', help='Automatically reserve timeshift ticket if not reserved yet. [Default: no]')

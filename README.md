@@ -161,7 +161,7 @@ options:
                           - The value of "user_session";
                           - A Netscape-style cookie file.
   --comments {yes,no,only}, -d {yes,no,only}
-                        Control if comments (danmaku) are downloaded. [Default: yes]
+                        Control if comments (danmaku) are downloaded. [Default: no]
   --proxy PROXY         Specify a proxy, "none", or "auto" (automatically detects system proxy settings). [Default: auto]
   --save-dir SAVE_DIR, -o SAVE_DIR
                         Specify the directory to save the downloaded files. [Default: current directory]
