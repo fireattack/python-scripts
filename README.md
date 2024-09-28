@@ -155,7 +155,7 @@ options:
   --dump                Dump all the metadata to json files.
   --thumb               Download thumbnail only. Only works for video type (not live type).
   --cookies COOKIES, -c COOKIES
-                        Cookie source. [Default: chrome]
+                        Cookie source.
                         Provide either:
                           - A browser name to fetch from;
                           - The value of "user_session";

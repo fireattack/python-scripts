@@ -21,7 +21,7 @@ class NicoDownloader():
     def __init__(self, cookies, proxy=None, save_dir=None):
         def validate_cookie(cookies):
             for cookie in cookies:
-                if cookie.name == 'user_session':
+                if cookie.name == 'user_session' and cookie.value:
                     print('Find user_session in cookie:', cookie.value)
                     break
             else:
@@ -112,7 +112,7 @@ class NicoDownloader():
         cookies = self.session.cookies.get_dict()
         asyncio.run(download(video_id, output, cookies))
 
-    def download_timeshift(self, url_or_video_id, info_only=False, comments='yes', verbose=False, dump=False, auto_reserve=False):
+    def download_timeshift(self, url_or_video_id, info_only=False, comments='no', verbose=False, dump=False, auto_reserve=False):
         video_id, url, video_type = self._parse_url_or_video_id(url_or_video_id)
 
         return_value = {
@@ -316,7 +316,16 @@ class NicoDownloader():
         download(thumbnail_url, filename=self.save_dir / video_id)
 
 if __name__ == "__main__":
+    import shlex
+    import sys
     import argparse
+
+    # auto load arguments from nico.txt
+    for f in [Path(__file__).parent / 'nico.txt', Path('nico.txt')]:
+        if f.exists():
+            with open(f, encoding='utf8') as f:
+                sys.argv.extend(shlex.split(f.read().replace('\\', '\\\\')))
+                break
 
     # https://stackoverflow.com/questions/3853722/how-to-insert-newlines-on-argparse-help-text
     class SmartFormatter(argparse.HelpFormatter):
@@ -331,7 +340,7 @@ if __name__ == "__main__":
     parser.add_argument('--info', '-i', action='store_true', help='Print info only.')
     parser.add_argument('--dump', action='store_true', help='Dump all the metadata to json files.')
     parser.add_argument('--thumb', action='store_true', help='Download thumbnail only. Only works for video type (not live type).')
-    parser.add_argument('--cookies', '-c', default='chrome', help='R|Cookie source. [Default: chrome]\nProvide either:\n  - A browser name to fetch from;\n  - The value of "user_session";\n  - A Netscape-style cookie file.')
+    parser.add_argument('--cookies', '-c', help='R|Cookie source.\nProvide either:\n  - A browser name to fetch from;\n  - The value of "user_session";\n  - A Netscape-style cookie file.')
     parser.add_argument('--comments', '-d', default='no', choices=['yes', 'no', 'only'], help='Control if comments (danmaku) are downloaded. [Default: no]')
     parser.add_argument('--proxy', default='auto', help='Specify a proxy, "none", or "auto" (automatically detects system proxy settings). [Default: auto]')
     parser.add_argument('--save-dir', '-o', help='Specify the directory to save the downloaded files. [Default: current directory]')
