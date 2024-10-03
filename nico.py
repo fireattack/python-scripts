@@ -6,14 +6,35 @@ from subprocess import run
 from urllib.parse import urljoin, urlparse
 from urllib.request import getproxies
 from pathlib import Path
-
 import websocket
 from rich.console import Console
 from rich.table import Table
+
 from util import download, dump_json, get, MyTime, requests_retry_session, safeify, to_jp_time, load_cookie
+from proto.dwango.nicolive.chat.service.edge import payload_pb2 as chat
+import google.protobuf.json_format
 
 console = Console()
 print = console.print
+
+# based on https://github.com/rinsuki-lab/ndgr-reader/blob/main/src/protobuf-stream-reader.ts
+def read_protobuf_message(data):
+    offset = 0
+    result = 0
+    i = 0
+    while True:
+        if offset >= len(data):
+            return None
+        current = data[offset]
+        result |= (current & 0x7F) << i
+        offset += 1
+        i += 7
+        if not (current & 0x80):
+            break
+    if offset + result > len(data):
+        return None
+    return data[offset:offset + result]
+
 
 class NicoDownloader():
     HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36'}
@@ -86,31 +107,43 @@ class NicoDownloader():
         live_data = json.loads(soup.select_one('#embedded-data')['data-props'])
         return live_data
 
-    def download_comments(self, video_id, output):
-        import asyncio
-        try:
-            from ndgr_client import NDGRClient
-        except ImportError:
-            print('ERROR: Please install ndgr_client first.', style='bold red')
-            print('You can install it by running: "pip install git+https://github.com/tsukumijima/NDGRClient"')
-            return
+    def download_comments_native(self, message_server_info, output):
+        view_uri = message_server_info['data']['viewUri']
+        #"vposBaseTime": "2024-09-25T21:50:00+09:00",
+        vpos_base_time_dt = datetime.strptime(message_server_info['data']['vposBaseTime'], '%Y-%m-%dT%H:%M:%S%z')
+        vpos_base_time_epoch = int(vpos_base_time_dt.timestamp())
+        print(f'vpos Base time: {vpos_base_time_dt} ({vpos_base_time_epoch})')
 
-        async def download(video_id, output, cookies, verbose=False):
-            ndgr_client = NDGRClient(video_id, verbose=verbose, console_output=True)
-            await ndgr_client.login(cookies=cookies)
+        at = 'now'
+        backward_api_uri = None
+        while True:
+            url = f'{view_uri}?&at={at}'
+            print(f'Fetch {url}')
+            r = self.session.get(url, timeout=30)
+            message = read_protobuf_message(r.content)
+            chunked_entry = chat.ChunkedEntry()
+            chunked_entry.ParseFromString(message)
+            if chunked_entry.HasField('next'):
+                at = chunked_entry.next.at
+            elif chunked_entry.HasField('backward'):
+                backward_api_uri = chunked_entry.backward.segment.uri
+                break
+        messages = []
+        while True:
+            print(f'Fetch {backward_api_uri}')
+            r2 = self.session.get(backward_api_uri, timeout=30)
+            packed_segment = chat.PackedSegment()
+            packed_segment.ParseFromString(r2.content)
+            # prepend to messages
+            messages = [message for message in packed_segment.messages] + messages
+            if packed_segment.HasField('next'):
+                backward_api_uri = packed_segment.next.uri
+            else:
+                break
+        print(f'Find {len(messages)} messages.')
+        dump_json([google.protobuf.json_format.MessageToDict(message) for message in messages], output)
+        # TODO: convert the json to a format that is compatible with nicoxml2ass
 
-            comments = await ndgr_client.downloadBackwardComments()
-            comments_count = len(comments)
-
-            with output.open(mode='w', encoding='utf-8') as f:
-                f.write('<?xml version="1.0" encoding="UTF-8"?>\n<packet>\n')
-                f.write(NDGRClient.convertToXMLString(comments))
-                f.write('\n</packet>\n')
-            print(f'Total comments for {video_id}: {comments_count}')
-            print(f'Saved to {output}.')
-
-        cookies = self.session.cookies.get_dict()
-        asyncio.run(download(video_id, output, cookies))
 
     def download_timeshift(self, url_or_video_id, info_only=False, comments='no', verbose=False, dump=False, auto_reserve=False):
         video_id, url, video_type = self._parse_url_or_video_id(url_or_video_id)
@@ -128,8 +161,8 @@ class NicoDownloader():
 
         live_data = self.fetch_page(url)
         title = live_data['program']['title']
-        end_time_epoch = live_data["program"]["endTime"]
         begin_time_epoch = live_data["program"]["beginTime"]
+        end_time_epoch = live_data["program"]["endTime"]
         begin_time_dt = to_jp_time(datetime.fromtimestamp(begin_time_epoch))
         end_time_dt = to_jp_time(datetime.fromtimestamp(end_time_epoch))
 
@@ -228,6 +261,7 @@ class NicoDownloader():
         verbose and print('Payload:', start_watching_payload)
         ws.send(json.dumps(start_watching_payload))
         stream_info = None
+        message_server_info = None
 
         while True:
             verbose and print("Receiving...")
@@ -236,20 +270,26 @@ class NicoDownloader():
             data = json.loads(result)
             if data['type'] == 'stream':
                 stream_info = data
+            elif data['type'] == 'messageServer':
+                message_server_info = data
+            if stream_info and message_server_info:
+                print('Got all the info we needed. Close WS connection.')
                 break
         ws.close()
 
         if dump:
             dump_json(stream_info, self.save_dir / f'{filename}.streaminfo.json')
+            dump_json(message_server_info, self.save_dir / f'{filename}.msgserverinfo.json')
         return_value.update({
-            'stream_info': stream_info
+            'stream_info': stream_info,
+            'message_server_info': message_server_info
         })
 
         ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         if comments in ['yes', 'only']:
             print('Downloading comments...')
-            danmaku_output = self.save_dir / f'{filename}.xml'
-            ex.submit(self.download_comments, video_id, danmaku_output)
+            danmaku_output = self.save_dir / f'{filename}.json'
+            ex.submit(self.download_comments_native, message_server_info, end_time_dt, danmaku_output)
 
         if comments == 'only':
             ex.shutdown(wait=True)
