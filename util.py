@@ -30,7 +30,7 @@ TWITTER_FILENAME_RELEXED_RE = re.compile(r'^(?:(?P<prefix>.+?)(?: +?|[-]??))??(?
 
 # ==================== data structure manipulation & misc. ====================
 def to_list(a):
-    return a if not a or isinstance(a, list) else [a]
+    return a if isinstance(a, list) or a is None else [a]
 
 def flatten(x):
     from collections.abc import Iterable

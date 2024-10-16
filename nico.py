@@ -289,11 +289,13 @@ class NicoDownloader():
         if comments in ['yes', 'only']:
             print('Downloading comments...')
             danmaku_output = self.save_dir / f'{filename}.json'
+            return_value['danmaku'] = danmaku_output
             ex.submit(self.download_comments_native, message_server_info, end_time_dt, danmaku_output)
+        else:
+            return_value['danmaku'] = None
 
         if comments == 'only':
             ex.shutdown(wait=True)
-            return_value['danmaku'] = danmaku_output
             return return_value
 
         master_m3u8_url = stream_info['data']['uri']
@@ -330,7 +332,6 @@ class NicoDownloader():
             'master_m3u8_url': master_m3u8_url,
             'playlist_m3u8_url': playlist_url,
             'output': output,
-            'danmaku': danmaku_output if comments in ['yes', 'only'] else None
         })
 
         return return_value
