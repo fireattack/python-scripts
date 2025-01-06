@@ -66,20 +66,29 @@ class NicoDownloader():
         self.session.headers.update(self.HEADERS)
 
         # proxy settings
-        if proxy is None or proxy.lower() == 'none':
-            proxy = None
+        if not proxy or proxy.lower() == 'none':
+            # it's recommended to set proxy to '' instead of None, otherwise
+            # some redirected requests may not actually use the proxy settings.
+            # see https://github.com/psf/requests/issues/6153
+
+            proxy = ''
         elif proxy == 'auto':
-            proxies = getproxies()
-            if proxy := proxies.get('http'):
+            sys_proxies = getproxies()
+            if proxy := sys_proxies.get('http'):
                 print(f'INFO: Automatically use system proxy {proxy}')
-        # I don't think system proxy would be missing scheme, but just in case
+        # I don't think system proxy would be missing scheme ever, but just in case
         if proxy and '://' not in proxy:
             print('WARN: Proxy is missing scheme. Assuming http://')
             proxy = f'http://{proxy}'
-
+        # setting self.session.proxies alone isn't enough; because requests will
+        # prioritize system proxy over session.proxies.
+        # you have to set proxy at request level to override system proxy.
+        # see https://github.com/psf/requests/issues/2018
+        # so, we have to disable system proxy by setting trust_env to False first.
+        self.session.trust_env = False
         self.session.proxies = {'http': proxy, 'https': proxy}
+        # this is for websocket connection/minyami download
         self.proxy = proxy
-
         self.save_dir = Path(save_dir) if save_dir else Path.cwd()
 
     def _parse_url_or_video_id(self, url_or_video_id):
