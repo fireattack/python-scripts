@@ -27,6 +27,10 @@ NOTE: to make it simpler, the returned m['extra'] and m['dupe'] will have leadin
 TWITTER_FILENAME_RE = re.compile(r'^(?P<screen_name>\w+)-(?P<id>\d+)-(?P<date>\d{8})_(?P<time>\d{6})-(?P<type>[^-.]+?)(?P<index>\d*)(?P<dupe> *\(\d+\))?(?P<suffix>\.(?:mp4|zip|jpg|png))$')
 TWITTER_FILENAME_RELEXED_RE = re.compile(r'^(?:(?P<prefix>.+?)(?: +?|[-]??))??(?P<screen_name>\w+)-(?P<id>\d+)-(?P<date>\d{8})_(?P<time>\d{6})-(?P<type>[^-.]+?)(?P<index>\d*)(?P<extra>[ _-].+?)??(?P<dupe> *\(\d+\))?(?P<suffix>\.(?:mp4|zip|jpg|png))$')
 
+# 240521_osk_airi_C7OgZYqPbyI.jpg
+# 241101_o_rikachi_o_DBz6UC3TZCL_5.jpg
+# 241101_o_rikachi_o_STORY_3491384076140533984.jpg
+INSTAGRAM_FILENAME_RE = re.compile(r'^(?P<date>\d{6})_(?P<user_id>.+?)_(?:STORY_(?P<story_id>\d+)|(?P<post_id>[\-_A-Za-z0-9]{11})(?:_(?P<index>\d+))?)(?P<suffix>\.[^.]+)$')
 
 # ==================== data structure manipulation & misc. ====================
 def to_list(a):
@@ -285,6 +289,17 @@ def array_to_range_text(a, sep=', ', dash='-'):
     return s
 
 def compare_obj(value_old, value, print_prefix='ROOT', mute=False):
+    '''
+    Compare two objects and print the differences.
+    value_old: the old object
+    value: the new object
+    print_prefix: the prefix to print before the key
+    mute: whether to print the differences or not
+
+    Returns:
+    bool: whether the two objects are equal or not
+    '''
+
     # pip install rich
     from rich import print as rprint
 
