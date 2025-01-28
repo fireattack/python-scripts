@@ -76,9 +76,13 @@ class InstaliveDownloader:
     def __init__(self, url, save_path, debug=False, quality=None):
         self.session = requests.Session()
         self.url = url
+        if save_path is None:
+            mpd_name = get_webname(url).split('.')[0]
+            save_path = f'instalive_{mpd_name}'
         self.save_path = Path(save_path)
         if not self.save_path.exists():
             self.save_path.mkdir(parents=True)
+        assert self.save_path.is_dir(), f'{self.save_path} is not a directory!'
         self.debug = debug
         if debug:
             print('Debug mode enabled. Only download 30 segments.')
@@ -125,29 +129,30 @@ class InstaliveDownloader:
         video_adaptation_set = period[0]
         # make a simple list of video representations because we can't directly sort xml elements
         videos = [
-            (int(x.attrib['width']),
-             int(x.attrib['height']),
-             float(x.attrib['frameRate']),
-             float(x.attrib['bandwidth']),
-             idx,
-             x.attrib['id']
-             ) for idx, x in enumerate(video_adaptation_set)
+            {
+                'width': int(x.attrib['width']),
+                'height': int(x.attrib['height']),
+                'frame_rate': float(x.attrib['frameRate']),
+                'bandwidth': float(x.attrib['bandwidth']),
+                'idx': idx,
+                'id': x.attrib['id']
+            } for idx, x in enumerate(video_adaptation_set)
         ]
-        # bvr = best video representation
+
         print('Video representations:')
         for v in videos:
-            print(f'[{v[4]}] {v[5]} {v[0]}x{v[1]}, {v[2]}fps, {v[3]/1024:.1f} kbps')
+            print(f'[{v["idx"]}] {v["id"]} {v["width"]}x{v["height"]}, {v["frame_rate"]}fps, {v["bandwidth"]/1024:.1f} kbps')
 
         if not quality:
-            videos.sort(reverse=True)
-            self.video_index = videos[0][-2]
-            self.video_id = videos[0][-1]
+            videos.sort(reverse=True, key=lambda x: (x['width'], x['height'], x['frame_rate'], x['bandwidth']))
+            self.video_index = videos[0]['idx']
+            self.video_id = videos[0]['id']
             print(f'Use the best one ([{self.video_index}] {self.video_id}).')
         else:
             for v in videos:
-                if v[5] == quality:
-                    self.video_index = v[-2]
-                    self.video_id = v[-1]
+                if quality in v['id']:
+                    self.video_index = v['idx']
+                    self.video_id = v['id']
                     print(f'Use the specified one ([{self.video_index}] {self.video_id}).')
                     break
             else:
@@ -166,9 +171,8 @@ class InstaliveDownloader:
         d_list = [int(x.attrib['d']) for x in timeline]
         print('Intervals between segments:', ', '.join(str(d) for d in d_list))
         # get most common interval
-        interval = max(set(d_list), key=d_list.count)
-        print(f'Heuristically set interval to {interval}')
-        self.interval = interval
+        self.interval = max(set(d_list), key=d_list.count)
+        print(f'Heuristically set interval to {self.interval}')
 
         # so far, instagram live only has one audio representation, so just use it.
         # if there are more than one, we need to change the code.
@@ -369,7 +373,8 @@ class InstaliveDownloader:
             diff_count[diff] = diff_count.get(diff, 0) + 1
         print(f'Count of diff values between each segment:', diff_count)
 
-        if max(diffs) > self.interval * 1.1:
+        # check if there is any missing segment -- which is larger than 1.2 times of the interval.
+        if max(diffs) > self.interval * 1.2:
             idx = diffs.index(max(diffs))
             worst = (ids[idx], ids[idx+1])
             print(f'Largest ID diff between each segment: {max(diffs)}, at {ids[idx]} -> {ids[idx+1]}')
@@ -456,6 +461,8 @@ def main(url, save_path, time, debug, action, quality):
         return
     if action == 'info':
         for k, v in downloader.__dict__.items():
+            if k == 'mpd_text': # too long.
+                v = v[:10] + '...' + v[-10:]
             print(f'{k}: {v}')
         return
     try:
@@ -518,25 +525,24 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Available actions:\n'
                     '  all      - Download both video and audio, and merge them (default)\n'
-                    '  live     - Download the live stream only\n'
+                    '  live     - Download the live stream only (no backtracking)\n'
                     '  video    - Download video only\n'
                     '  audio    - Download audio only\n'
                     '  merge    - Merge downloaded video and audio\n'
                     '  check    - Check the downloaded segments to make sure there is no missing segments\n'
-                    '  manual   - Manually process a specified range (used together with --range)\n'
+                    '  manual   - Manually check missing segments at the largest gap (or use --range to assign a range)\n'
                     '  info     - Display downloader object info\n'
                     '  import:<path> - Import segments downloaded via N_m3u8DL-RE from a given path',
         formatter_class=CustomHelpFormatter
     )
 
-
     parser.add_argument("url", help="url of mpd")
     parser.add_argument("--action", '-a', default='all', help="action to perform (default: all)")
-    parser.add_argument("--dir", "-d", default='.', help="save path (default: CWD)")
+    parser.add_argument("--dir", "-d", help="save path (default: instalive_{mpd_id})")
     parser.add_argument("--debug", action='store_true', help="debug mode")
-    parser.add_argument("--quality", "-q", help="manually assign video quality (default: auto)")
+    parser.add_argument("--quality", "-q", help="manually assign video quality by quality name (default: auto)")
     parser.add_argument("--time", "-t", help="manually assign last t (default: auto)")
-    parser.add_argument('--range', help='manually assign range (start,end) for quick iterate test mode')
+    parser.add_argument('--range', help='manually assign iteration range (start,end) for manual action')
 
     args = parser.parse_args()
 

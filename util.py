@@ -654,7 +654,7 @@ def quickmd5(f):
 
     return f"{file_size}_{hasher.hexdigest()}" # this way is more readable than just return the hexdigest.
 
-def move_or_delete_duplicate(src, dst, verbose=True, conflict='error'):
+def move_or_delete_duplicate(src, dst, verbose=True, conflict='error', hash_method=quickmd5):
     """
     Move or delete a file if it is a duplicate.
 
@@ -673,13 +673,12 @@ def move_or_delete_duplicate(src, dst, verbose=True, conflict='error'):
     Returns:
         None
     """
-
     if not src.exists():
         raise FileNotFoundError(f"The source file {src} does not exist.")
     if src == dst:
         raise ValueError(f"Source and destination are the same: {src}")
     if dst.exists():
-        if quickmd5(dst) == quickmd5(src):
+        if hash_method(src) == hash_method(dst):
             print(f'[W] {src.name} is a duplicate. Remove.')
             src.unlink()
             return
