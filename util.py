@@ -656,14 +656,15 @@ def quickmd5(f):
 
 def move_or_delete_duplicate(src, dst, verbose=True, conflict='error', hash_method=quickmd5):
     """
-    Move or delete a file if it is a duplicate.
+    Move a file, or delete it if the same file already exists at the destination.
 
     Args:
-        src (str): The path to the source file.
-        dst (str): The path to the destination file.
+        src (pathlib.Path): The path to the source file.
+        dst (pathlib.Path): The path to the destination file.
         verbose (bool, optional): Whether to print verbose output. Defaults to True.
         conflict (str, optional): The conflict resolution strategy. Can be one of 'error', 'skip', or 'rename'.
                                  Defaults to 'error'.
+        hash_method (function, optional): The hash method to use for comparing files. Defaults to quickmd5.
 
     Raises:
         FileNotFoundError: If the source file does not exist.
@@ -687,13 +688,14 @@ def move_or_delete_duplicate(src, dst, verbose=True, conflict='error', hash_meth
                 print(f'[W] Destination file {dst} already exists and hash does not match. Skip.')
                 return
             elif conflict == 'error':
-                raise FileExistsError(f"Destination file {dst} already exists.")
+                raise FileExistsError(f"Destination file {dst} already exists and hash does not match.")
             elif conflict == 'rename':
-                dst = ensure_nonexist(dst)
-                print(f'[W] Destination file {src.name} already exists. Use filename {dst.name} instead.')
+                dst_ = ensure_nonexist(dst)
+                print(f'[W] Destination file {dst} already exists and hash does not match. Rename to {dst_.name} instead.')
+                dst = dst_
     if verbose:
         if src.parent == dst.parent:
-            print(f"Rename {src.name} to {dst.name}")
+            print(f"Rename {src.name} to {dst.name}.")
         elif src.name == dst.name:
             print(f'Move {src.name} into {dst.parent}')
         else:
