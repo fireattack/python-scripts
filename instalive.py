@@ -5,12 +5,15 @@ import time
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
-from shutil import copy2, copyfileobj
+from shutil import copy2, copyfileobj, get_terminal_size
 from subprocess import run
 from urllib.parse import unquote, urljoin
 
 import requests
 from tqdm import tqdm
+
+
+TOLERANCE = 0.2
 
 
 def parse_iso8601_duration(duration):
@@ -29,6 +32,13 @@ def parse_iso8601_duration(duration):
     # Convert everything to seconds
     total_seconds = (days * 86400) + (hours * 3600) + (minutes * 60) + seconds
     return total_seconds
+
+
+def print_full_width(s):
+    '''Print a string to full width of the terminal.'''
+    width = get_terminal_size().columns
+    print('\r' + s.ljust(width), end='')
+
 
 def concat(files, output, verbose=False):
     '''Concatenate files into one file.'''
@@ -125,6 +135,7 @@ class InstaliveDownloader:
         print(f'Availability start time: {availability_start_time} ({td_format(availability_start_time - current_time)})')
         print(f'Availability end time: {availability_end_time} ({td_format(availability_end_time - current_time)})')
 
+        # process video representations
         period = mpd[0]
         video_adaptation_set = period[0]
         # make a simple list of video representations because we can't directly sort xml elements
@@ -143,20 +154,23 @@ class InstaliveDownloader:
         for v in videos:
             print(f'[{v["idx"]}] {v["id"]} {v["width"]}x{v["height"]}, {v["frame_rate"]}fps, {v["bandwidth"]/1024:.1f} kbps')
 
-        if not quality:
+        if not quality or quality == 'auto':
             videos.sort(reverse=True, key=lambda x: (x['width'], x['height'], x['frame_rate'], x['bandwidth']))
             self.video_index = videos[0]['idx']
             self.video_id = videos[0]['id']
             print(f'Use the best one ([{self.video_index}] {self.video_id}).')
         else:
             for v in videos:
-                if quality in v['id']:
+                # quality could be either "dash-lp-pst-v" or "pst"
+                if quality == v['id'] or f'{str(quality)}-v' in v['id']:
                     self.video_index = v['idx']
                     self.video_id = v['id']
                     print(f'Use the specified one ([{self.video_index}] {self.video_id}).')
                     break
             else:
                 raise Exception(f'Quality {quality} not found.')
+
+        self.save_path_video = self.save_path / self.video_id
 
         video_representation = video_adaptation_set[self.video_index]
         video_segment_template = video_representation[0]
@@ -174,18 +188,37 @@ class InstaliveDownloader:
         self.interval = max(set(d_list), key=d_list.count)
         print(f'Heuristically set interval to {self.interval}')
 
-        # so far, instagram live only has one audio representation, so just use it.
-        # if there are more than one, we need to change the code.
-        assert len(period[1][0]) == 1, "Only one audio representation is supported. Please report if you see this message."
-        audio_segment_template = period[1][0][0]
+        # process audio representations
+        audio_adaptation_set = period[1]
+        audios = [
+            {
+            'id': x.attrib['id'],
+            'bandwidth': float(x.attrib['bandwidth']),
+            'sampling_rate': int(x.attrib['audioSamplingRate']),
+            'idx': idx
+            } for idx, x in enumerate(audio_adaptation_set)
+        ]
+        print('Audio representations:')
+        for a in audios:
+            print(f'[{a["idx"]}] {a["id"]}, {a["bandwidth"]/1024:.1f} kbps, {a["sampling_rate"]} Hz')
+
+        audios.sort(reverse=True, key=lambda x: (x['bandwidth'], x['sampling_rate']))
+        self.audio_index = audios[0]['idx']
+        self.audio_id = audios[0]['id']
+        print(f'Use the best one ([{self.audio_index}] {self.audio_id}).')
+        self.save_path_audio = self.save_path / self.audio_id
+
+        audio_representation = audio_adaptation_set[self.audio_index]
+        audio_segment_template = audio_representation[0]
+
         self.audio_init = urljoin(self.url, audio_segment_template.attrib['initialization'])
         self.audio_url_template = urljoin(self.url, audio_segment_template.attrib['media']).replace('$Time$', '{}')
 
     def download_init(self):
         print('Download init segments...')
-        r = self._download(self.video_init, save_path=self.save_path/'video')
+        r = self._download(self.video_init, save_path=self.save_path_video)
         assert r in [200, 'Exists']
-        r = self._download(self.audio_init, save_path=self.save_path/'audio')
+        r = self._download(self.audio_init, save_path=self.save_path_audio)
         assert r in [200, 'Exists']
 
     def _get_segments(self):
@@ -203,12 +236,12 @@ class InstaliveDownloader:
 
     def fetch_video_by_id(self, id):
         url = self.video_url_template.format(id)
-        status = self._download(url, save_path=self.save_path/'video')
+        status = self._download(url, save_path=self.save_path_video)
         return status
 
     def fetch_audio_by_id(self, id):
         url = self.audio_url_template.format(id)
-        status = self._download(url, save_path=self.save_path/'audio')
+        status = self._download(url, save_path=self.save_path_audio)
         return status
 
     def quick_iterate(self, ids):
@@ -228,6 +261,7 @@ class InstaliveDownloader:
                         for f in futures:
                             f.cancel()
                         return id, status
+            # TODO: does not work since we call it in a thread.
             except KeyboardInterrupt:
                 print('\nInterrupted. Cancel all futures...')
                 for f in futures:
@@ -274,6 +308,7 @@ class InstaliveDownloader:
             time.sleep(fetch_interval)
 
     def download_video(self, forward=False):
+
         count = 0
         known_intervals = {
             self.interval: 0,
@@ -285,10 +320,8 @@ class InstaliveDownloader:
         sign = 1 if forward else -1
 
         def surrounding(x):
-            # surrounding is defined as 60% interval behind of x and 110% interval ahead of x
-            # ahead is 100% to make sure the download can continue if there is one missing segment.
-            start_id = x - int(self.interval * 0.6) * sign
-            end_id = x + int(self.interval * 1.1 + 1) * sign
+            start_id = x - int(self.interval * (0.5+TOLERANCE)) * sign
+            end_id = x + int(self.interval * (1.0+TOLERANCE) + 1) * sign
             ids = list(range(start_id, end_id, -1 if start_id > end_id else 1))
             ids.sort(key=lambda x: abs(x - x))
             return ids
@@ -296,32 +329,32 @@ class InstaliveDownloader:
         while True:
             valid_id = None
             # firstly, we try to find if existing local file that is close to the guesses[0].
-            # which is defined as +/- 10% of the interval.
+            # which is defined as +/- TOLERANCE (default: 20%) of the interval.
             # notice that we don't need to try all the guesses, they will be checked in the
             # next step.
-            for candidate in range(id_guesses[0] - int(self.interval*0.1), id_guesses[0] + int(self.interval*0.1) + 1):
+            for candidate in range(id_guesses[0] - int(self.interval*TOLERANCE), id_guesses[0] + int(self.interval*TOLERANCE) + 1):
                 url = self.video_url_template.format(candidate)
-                f = self.save_path/'video'/ get_webname(url)
+                f = self.save_path_video / get_webname(url)
                 if f.exists() and f.stat().st_size > 0:
                     valid_id = candidate
-                    print(f'\rSegment {valid_id}: {f} already exists. Skip.   ', end='')
+                    print_full_width(f'Segment {valid_id}: {f} already exists. Skip.')
                     break
             # if not found locally, we try to fetch the segment by id from the all
             # (last_valid_id - potential_interval) pools.
             # The order matters: we try the most common interval first.
-            # this is single-threaded, because it is more costly to close all the threads
-            # if we initiate them altogether..
+            # this is single-threaded, because it is more time-consuming trying to close all the threads.
             if not valid_id:
                 for candidate in id_guesses:
                     status = self.fetch_video_by_id(candidate)
-                    print(f'\rSegment {candidate}: HTTP {status}                                 ', end='')
+                    print_full_width(f'Segment {candidate}: HTTP {status}')
                     if status in [200, 'Exists']:
                         valid_id = candidate
                         break
             # If still not found, we iterate around the guesses[0] to find the next segment.
-            # the range is defined as 60% behind of x and 110% ahead of x,
-            # e.g. for 2000 interval, it would be last_id - 800 to last_id - 4200, sorted by
-            # distance to last_id - 2000.
+            # the range is defined as 50%+TOLERANCE behind of x and 100%+TOLERANCE ahead of x,
+            # where x is the guesses[0].
+            # e.g. for 2000 interval, x = last_id - 2000, the range would be
+            # last_id - 800 to last_id - 4400, sorted by distance to last_id - 2000.
             # notice that it covers up to the range of next next id, this way we ensure we still
             # continue the downloading instead of stopping too early (despite missing a segment).
             if not valid_id:
@@ -331,7 +364,7 @@ class InstaliveDownloader:
                 if not valid_id:
                     print("\nFailed to find next segment. Assume we downloaded all. Stop.")
                     break
-                print(f'\rSegment {valid_id}: HTTP {status}                                 ', end='')
+                print_full_width(f'Segment {valid_id}: HTTP {status}')
             # at this point, we should have a valid_id.
             assert valid_id
             # add new interval to known_intervals
@@ -359,9 +392,8 @@ class InstaliveDownloader:
             id_guesses = [valid_id + interval * sign for interval in known_intervals]
 
     def check(self):
-        print('Check if there is any missing segment...')
-        p = self.save_path / 'video'
-        files = list(p.iterdir())
+        print('Check if there is any missing video segment...')
+        files = list(self.save_path_video.iterdir())
         # filename format: 17981336783244063_0-1297029.m4v
         ids = [int(m[1]) for f in files if (m := re.search(r'\d+_0-(\d+)', f.name))]
         ids.sort()
@@ -372,23 +404,21 @@ class InstaliveDownloader:
         for diff in diffs:
             diff_count[diff] = diff_count.get(diff, 0) + 1
         print(f'Count of diff values between each segment:', diff_count)
+        max_idx = diffs.index(max(diffs))
+        print(f'Largest ID diff between each segment: {max(diffs)}, at {ids[max_idx]} -> {ids[max_idx+1]}')
+        min_idx = diffs.index(min(diffs))
+        print(f'Smallest ID diff between each segment: {min(diffs)}, at {ids[min_idx]} -> {ids[min_idx+1]}')
 
-        # check if there is any missing segment -- which is larger than 1.2 times of the interval.
-        if max(diffs) > self.interval * 1.2:
-            idx = diffs.index(max(diffs))
-            worst = (ids[idx], ids[idx+1])
-            print(f'Largest ID diff between each segment: {max(diffs)}, at {ids[idx]} -> {ids[idx+1]}')
-            idx = diffs.index(min(diffs))
-            print(f'Smallest ID diff between each segment: {min(diffs)}, at {ids[idx]} -> {ids[idx+1]}')
+        # Check if there are any missing segments, defined as gaps larger than 1.2 times the interval.
+        if max(diffs) > self.interval * (1+TOLERANCE):
             print(f'It is likely that the video is not fully downloaded!!')
-            return worst
+            return (ids[max_idx], ids[max_idx+1])
         else:
             print('No missing segment found.')
 
     def download_audio(self):
         print('Downloading audio segments...')
-        audio_save_path = self.save_path / 'audio'
-        files = list((self.save_path / 'video').iterdir())
+        files = list(self.save_path_video.iterdir())
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
             futures = []
             count = 0
@@ -399,7 +429,7 @@ class InstaliveDownloader:
                     continue
                 id = re.search(r'_0-(init|\d+)\.m4v', f.name)[1]
                 url = self.audio_url_template.format(id)
-                futures.append(ex.submit(self._download, url, save_path=audio_save_path))
+                futures.append(ex.submit(self._download, url, save_path=self.save_path_audio))
             for _ in concurrent.futures.as_completed(futures):
                 count += 1
                 print(f'Finished {count}/{len(futures)}         ', end='\r')
@@ -412,16 +442,17 @@ class InstaliveDownloader:
             return int(re.search(r'\d+_0-(\d+)', f.name)[1])
 
         video_file = self.save_path / 'video.m4v'
-        files = list((self.save_path / 'video').iterdir())
+        files = list(self.save_path_video.iterdir())
         print(f'Find {len(files)} video segments. Merging...')
         files.sort(key=get_key)
         concat(files, video_file)
 
         audio_file = self.save_path / 'audio.m4a'
-        files2 = list((self.save_path / 'audio').iterdir())
+        files2 = list(self.save_path_audio.iterdir())
         print(f'Find {len(files2)} audio segments. Merging...')
         files2.sort(key=get_key)
         concat(files2, audio_file)
+
         print(f'Merging video and audio using FFMPEG...')
         run(['ffmpeg', '-loglevel', 'error', '-stats', '-i', video_file, '-i', audio_file, '-c', 'copy', self.save_path/'merged.mp4'])
 
@@ -432,15 +463,15 @@ class InstaliveDownloader:
             if p.is_dir() and (p / '_init.mp4').exists():
                 if 'avc' in p.name:
                     template = self.video_url_template
-                    type_ = 'video'
+                    save_path = self.save_path_video
                 else:
                     template = self.audio_url_template
-                    type_ = 'audio'
+                    save_path = self.save_path_audio
                 for f in p.iterdir():
                     if f.stem.isdigit():
                         id = int(f.stem)
                         new_filename = get_webname(template.format(id))
-                        newf = self.save_path / type_ / new_filename
+                        newf = save_path / new_filename
                         if newf.exists():
                             if newf.stat().st_size == f.stat().st_size:
                                 print(f'{id}: {newf} already exists. Skip.')
@@ -519,30 +550,30 @@ def main(url, save_path, time, debug, action, quality):
 if __name__ == '__main__':
     import argparse
 
-    class CustomHelpFormatter(argparse.RawTextHelpFormatter):
-        pass
-
     parser = argparse.ArgumentParser(
         description='Available actions:\n'
-                    '  all      - Download both video and audio, and merge them (default)\n'
+                    '  all      - Download both video and audio (including live and backtracking), and then merge them (default)\n'
                     '  live     - Download the live stream only (no backtracking)\n'
                     '  video    - Download video only\n'
                     '  audio    - Download audio only\n'
                     '  merge    - Merge downloaded video and audio\n'
-                    '  check    - Check the downloaded segments to make sure there is no missing segments\n'
-                    '  manual   - Manually check missing segments at the largest gap (or use --range to assign a range)\n'
+                    '  check    - Check the downloaded segments to make sure there are no missing segments\n'
+                    '  manual   - Manually check missing segments at the largest gap (or use --range to assign a range) (for debugging only)\n'
                     '  info     - Display downloader object info\n'
                     '  import:<path> - Import segments downloaded via N_m3u8DL-RE from a given path',
-        formatter_class=CustomHelpFormatter
+        formatter_class=argparse.RawTextHelpFormatter
     )
 
     parser.add_argument("url", help="url of mpd")
     parser.add_argument("--action", '-a', default='all', help="action to perform (default: all)")
     parser.add_argument("--dir", "-d", help="save path (default: instalive_{mpd_id})")
     parser.add_argument("--debug", action='store_true', help="debug mode")
-    parser.add_argument("--quality", "-q", help="manually assign video quality by quality name (default: auto)")
-    parser.add_argument("--time", "-t", help="manually assign last t (default: auto)")
-    parser.add_argument('--range', help='manually assign iteration range (start,end) for manual action')
+    parser.add_argument("--quality", "-q", default='pst', help="manually assign video quality by quality name.\n"
+                        "(default: \"pst\": which is original (?) and has the best bitrate,\n"
+                        "but not necessarily the highest resolution.\n"
+                        "Pass empty string to use the highest resolution one.)")
+    parser.add_argument("--time", "-t", help="for debugging only; manually assign last t (default: auto)")
+    parser.add_argument('--range', help='for debugging only; manually assign iteration range (start,end) for manual action')
 
     args = parser.parse_args()
 

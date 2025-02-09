@@ -12,3 +12,4 @@ _test*.py
 *.json
 /SourceHanSans-Regular.otf
 /_old
+*.mpd
