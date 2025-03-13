@@ -360,22 +360,24 @@ def parse_to_shortdate(date_str, fmt=None):
     # pip install python-dateutil
     from dateutil import parser
 
+    current_year = datetime.now().year
+
     if fmt is None: fmt = '%y%m%d'
     if isinstance(date_str, datetime):
         return date_str.strftime(fmt)
 
     date_str = re.sub(r'[\s　]+', ' ', date_str).strip()
-    patterns = [r'(\d+)年 *(\d+)月 *(\d+)日', r'(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})']
+    patterns = [r'(?:(?P<y>\d+)年)? *(?P<m>\d+)月 *(?P<d>\d+)日',
+                r'(?P<y>\d{4})[/\-.](?P<m>\d{1,2})[/\-.](?P<d>\d{1,2})']
     for pattern in patterns:
-        if m := re.search(pattern, date_str):
-            date_str = m[1] + m[2].zfill(2) + m[3].zfill(2)
+        # Sometimes the string has extra spaces. But matching with spaces removed is dangerous
+        # since things like `2014/3/7 23:52` will be parsed as `20140372`. But it *should* have been
+        # caught by the first re.search already, so 99% of the cases it should be fine.
+        if m := re.search(pattern, date_str) or re.search(pattern, date_str.replace(' ', '')):
+            # year is assumed to be current year if not provided for kanji dates.
+            # for numbers, it is NOT assumed because it has way too many edge cases.
+            date_str = f"{m['y'] or current_year}-{m['m']}-{m['d']}"
             break
-        # Sometimes the string has extra spaces. But this is dangerous since things like `2014/3/7 23:52` will be parsed as `20140372`.
-        # But it *should* have been caught by the `m` above already, so 99% of the cases it should be fine.
-        if m2 := re.search(pattern, date_str.replace(' ', '')):
-            date_str = m2[1] + m2[2].zfill(2) + m2[3].zfill(2)
-            break
-
     try:
         return parser.parse(date_str, yearfirst=True).strftime(fmt)
     except:
