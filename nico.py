@@ -258,7 +258,8 @@ class NicoDownloader():
                 "quality": max_quality,
                 "protocol": "hls",
                 "latency": "low",
-                "chasePlay": False
+                "chasePlay": False,
+                'accessRightMethod': 'single_cookie'
             },
             "room": {
                 "protocol": "webSocket",
@@ -308,28 +309,41 @@ class NicoDownloader():
             return return_value
 
         master_m3u8_url = stream_info['data']['uri']
-        text = self.session.get(master_m3u8_url).text
-        playlist_url = re.search(r'^.+playlist\.m3u8.*$', text, re.MULTILINE)[0]
-        playlist_url = urljoin(master_m3u8_url, playlist_url) #+ '&start=682.251'
-        if verbose:
-            print('master m3u8 URL:', master_m3u8_url)
-            print('================== content ==================')
-            print(text)
-            print('==================== end ====================')
-            print('playlist m3u8 URL:', playlist_url)
-            print('================== content ==================')
-            print(self.session.get(playlist_url).text)
-            print('==================== end ====================')
 
-        # do not use arrays. the way python quotes & is not compatible with cmd/bat which minyami uses.
-        # See: https://stackoverflow.com/questions/74700723/
-        # Make sure to also use shell=True for *nix systems
-        output = self.save_dir / f'{filename}.ts'
+        if 'assetdelivery.dlive' in master_m3u8_url:
+            print('WARN: This is a DLive stream. Will use yt-dlp to download.')
+            assert 'cookies' in stream_info['data']
+            for c in stream_info['data']['cookies']:
+                self.session.cookies.set(c['name'], c['value'])
+            playlist_url = None
+            if verbose:
+                print('master m3u8 URL:', master_m3u8_url)
+                print('================== content ==================')
+                print(self.session.get(master_m3u8_url).text)
+                print('==================== end ====================')
+            output = self.save_dir / f'{filename}.mp4'
+            cmd = f'yt-dlp "{master_m3u8_url}" --ignore-config -N 10 -o "{output}" --add-headers "Cookie:dlive_bid={self.session.cookies.get("dlive_bid")}"'
+        else:
+            master_m3u8_text = self.session.get(master_m3u8_url).text
+            playlist_url = re.search(r'^.+playlist\.m3u8.*$', master_m3u8_text, re.MULTILINE)[0]
+            playlist_url = urljoin(master_m3u8_url, playlist_url) #+ '&start=682.251'
+            if verbose:
+                print('master m3u8 URL:', master_m3u8_url)
+                print('================== content ==================')
+                print(master_m3u8_text)
+                print('==================== end ====================')
+                print('playlist m3u8 URL:', playlist_url)
+                print('================== content ==================')
+                print(self.session.get(playlist_url).text)
+                print('==================== end ====================')
+            output = self.save_dir / f'{filename}.ts'
+            # do not use arrays. the way python quotes & is not compatible with cmd/bat which minyami uses.
+            # See: https://stackoverflow.com/questions/74700723/
+            # Make sure to also use shell=True for *nix systems
+            cmd = f'minyami -d "{playlist_url}" --key {audience_token},{max_quality} -o "{output}"'
+            if self.proxy:
+                cmd += f' --proxy "{self.proxy}"'
 
-        # print(f'"{playlist_url}", "--key", "{audience_token},{max_quality}"') # a format that can be copied to launch.json
-        cmd = f'minyami -d "{playlist_url}" --key {audience_token},{max_quality} -o "{output}"'
-        if self.proxy:
-             cmd += f' --proxy "{self.proxy}"'
         if verbose:
             cmd += ' --verbose'
         print('CMD is:')
