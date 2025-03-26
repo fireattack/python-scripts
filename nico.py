@@ -154,7 +154,7 @@ class NicoDownloader():
         # TODO: convert the json to a format that is compatible with nicoxml2ass
 
 
-    def download_timeshift(self, url_or_video_id, info_only=False, comments='no', verbose=False, dump=False, auto_reserve=False):
+    def download_timeshift(self, url_or_video_id, info_only=False, comments='no', verbose=False, dump=False, auto_reserve=False, simulate=False):
         video_id, url, video_type = self._parse_url_or_video_id(url_or_video_id)
 
         return_value = {
@@ -296,7 +296,7 @@ class NicoDownloader():
         })
 
         ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        if comments in ['yes', 'only']:
+        if comments in ['yes', 'only'] and not simulate:
             print('Downloading comments...')
             danmaku_output = self.save_dir / f'{filename}.json'
             return_value['danmaku'] = danmaku_output
@@ -304,7 +304,7 @@ class NicoDownloader():
         else:
             return_value['danmaku'] = None
 
-        if comments == 'only':
+        if comments == 'only' and not simulate:
             ex.shutdown(wait=True)
             return return_value
 
@@ -322,7 +322,9 @@ class NicoDownloader():
                 print(self.session.get(master_m3u8_url).text)
                 print('==================== end ====================')
             output = self.save_dir / f'{filename}.mp4'
-            cmd = f'yt-dlp "{master_m3u8_url}" --ignore-config -N 10 -o "{output}" --add-headers "Cookie:dlive_bid={self.session.cookies.get("dlive_bid")}"'
+            dlive_bid = self.session.cookies.get("dlive_bid")
+            # cmd = f'yt-dlp "{master_m3u8_url}" --ignore-config -N 10 -o "{output}" --add-headers "Cookie:dlive_bid={dlive_bid}"'
+            cmd = f'N_m3u8DL-RE "{master_m3u8_url}" --save-name "{filename}" --save-dir "{self.save_dir}" --auto-select -H "Cookie:dlive_bid={dlive_bid}" -mt -M format=mp4 --no-date-info'
         else:
             master_m3u8_text = self.session.get(master_m3u8_url).text
             playlist_url = re.search(r'^.+playlist\.m3u8.*$', master_m3u8_text, re.MULTILINE)[0]
@@ -348,8 +350,11 @@ class NicoDownloader():
             cmd += ' --verbose'
         print('CMD is:')
         print(cmd)
-        run(cmd, shell=True)
-        ex.shutdown(wait=True) # ensure download_comments is finished
+        if simulate:
+            output = None
+        else:
+            run(cmd, shell=True)
+            ex.shutdown(wait=True) # ensure download_comments is finished
 
         return_value.update({
             'master_m3u8_url': master_m3u8_url,
@@ -409,6 +414,7 @@ if __name__ == "__main__":
     parser.add_argument('--proxy', default='auto', help='Specify a proxy, "none", or "auto" (automatically detects system proxy settings). [Default: auto]')
     parser.add_argument('--save-dir', '-o', help='Specify the directory to save the downloaded files. [Default: current directory]')
     parser.add_argument('--reserve', action='store_true', help='Automatically reserve timeshift ticket if not reserved yet. [Default: no]')
+    parser.add_argument('--simulate', action='store_true', help='Simulate the download process without actually downloading.')
 
     args = parser.parse_args()
 
@@ -417,6 +423,6 @@ if __name__ == "__main__":
     if args.thumb:
         nico_downloader.download_thumbnail(args.url, info_only=args.info, dump=args.dump)
     else:
-        nico_downloader.download_timeshift(args.url, info_only=args.info, verbose=args.verbose, comments=args.comments, dump=args.dump, auto_reserve=args.reserve)
+        nico_downloader.download_timeshift(args.url, info_only=args.info, verbose=args.verbose, comments=args.comments, dump=args.dump, auto_reserve=args.reserve, simulate=args.simulate)
 
 
