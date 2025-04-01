@@ -324,7 +324,8 @@ class NicoDownloader():
             output = self.save_dir / f'{filename}.mp4'
             dlive_bid = self.session.cookies.get("dlive_bid")
             # cmd = f'yt-dlp "{master_m3u8_url}" --ignore-config -N 10 -o "{output}" --add-headers "Cookie:dlive_bid={dlive_bid}"'
-            cmd = f'N_m3u8DL-RE "{master_m3u8_url}" --save-name "{filename}" --save-dir "{self.save_dir}" --auto-select -H "Cookie:dlive_bid={dlive_bid}" -mt -M format=mp4 --no-date-info'
+            save_dir_str = str(self.save_dir).rstrip('\\') # remove trailing backslash otherwise it will escape quotes in cmd
+            cmd = f'N_m3u8DL-RE "{master_m3u8_url}" --save-name "{filename}" --save-dir "{save_dir_str}" --auto-select -H "Cookie:dlive_bid={dlive_bid}" -mt -M format=mp4 --no-date-info'
         else:
             master_m3u8_text = self.session.get(master_m3u8_url).text
             playlist_url = re.search(r'^.+playlist\.m3u8.*$', master_m3u8_text, re.MULTILINE)[0]
