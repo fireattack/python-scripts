@@ -296,17 +296,17 @@ class NicoDownloader():
         })
 
         ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        if comments in ['yes', 'only'] and not simulate:
+        if not simulate and comments in ['yes', 'only']:
             print('Downloading comments...')
             danmaku_output = self.save_dir / f'{filename}.json'
             return_value['danmaku'] = danmaku_output
-            ex.submit(self.download_comments_native, message_server_info, end_time_dt, danmaku_output)
+            if comments == 'yes':
+                ex.submit(self.download_comments_native, message_server_info, danmaku_output)
+            elif comments == 'only':
+                self.download_comments_native(message_server_info, danmaku_output)
+                return return_value
         else:
             return_value['danmaku'] = None
-
-        if comments == 'only' and not simulate:
-            ex.shutdown(wait=True)
-            return return_value
 
         master_m3u8_url = stream_info['data']['uri']
 
