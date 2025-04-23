@@ -128,17 +128,12 @@ e.parse()
 Nico Timeshift downloader. Download both video and comments.
 Also can download thumbnail from normal video. Downloading for normal video isn't supported (yet).
 
-Install these first:
 
 ```
 pip install browser-cookie3 websocket-client rich python-dateutil pytz requests beautifulsoup4 lxml
-npm i minyami -g
 ```
 
-If you want to download comments, you need to install [NDGRClient](https://github.com/tsukumijima/NDGRClient), too.
-```
-pip install git+https://github.com/tsukumijima/NDGRClient
-```
+The actual downloading is delegated to [minyami](https://github.com/Last-Order/Minyami) and/or [N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE), so make sure you have them installed first.
 
 CLI:
 
