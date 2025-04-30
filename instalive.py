@@ -323,16 +323,22 @@ class InstaliveDownloader:
             start_id = x - int(self.interval * (0.5+TOLERANCE)) * sign
             end_id = x + int(self.interval * (1.0+TOLERANCE) + 1) * sign
             ids = list(range(start_id, end_id, -1 if start_id > end_id else 1))
-            ids.sort(key=lambda x: abs(x - x))
+            ids.sort(key=lambda k: abs(k - x))
             return ids
 
         while True:
             valid_id = None
             # firstly, we try to find if existing local file that is close to the guesses[0].
             # which is defined as +/- TOLERANCE (default: 20%) of the interval.
+            # this is a "narrower" window than surrounding() function.
             # notice that we don't need to try all the guesses, they will be checked in the
             # next step.
-            for candidate in range(id_guesses[0] - int(self.interval*TOLERANCE), id_guesses[0] + int(self.interval*TOLERANCE) + 1):
+            ids = list(range(id_guesses[0] - int(self.interval*TOLERANCE), id_guesses[0] + int(self.interval*TOLERANCE) + 1))
+            ids.sort(key=lambda k: abs(k - id_guesses[0]))
+            # only try ids that are before the prev_id (if backward) or after the prev_id (if forward).
+            if prev_id:
+                ids = [id for id in ids if (id - prev_id) * sign > 0]
+            for candidate in ids:
                 url = self.video_url_template.format(candidate)
                 f = self.save_path_video / get_webname(url)
                 if f.exists() and f.stat().st_size > 0:
@@ -359,6 +365,8 @@ class InstaliveDownloader:
             # continue the downloading instead of stopping too early (despite missing a segment).
             if not valid_id:
                 ids = [id for id in surrounding(id_guesses[0]) if id not in id_guesses]
+                if prev_id:
+                    ids = [id for id in ids if (id - prev_id) * sign > 0]
                 valid_id, status = self.quick_iterate(ids)
                 # if still not, we assume we downloaded them all and stop.
                 if not valid_id:
@@ -370,6 +378,7 @@ class InstaliveDownloader:
             # add new interval to known_intervals
             if prev_id:
                 new_interval = abs(valid_id - prev_id)
+                assert new_interval > 0 # this should not happen.
                 # do not add new interval if it is too different from the current interval.
                 # for example, if the nominal interval is 2000, we should only add ones that are
                 # less than 3000. Otherwise we enables the possibility of skipping segments.
