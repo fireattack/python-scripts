@@ -70,11 +70,10 @@ class NicoDownloader():
             # it's recommended to set proxy to '' instead of None, otherwise
             # some redirected requests may not actually use the proxy settings.
             # see https://github.com/psf/requests/issues/6153
-
             proxy = ''
         elif proxy == 'auto':
             sys_proxies = getproxies()
-            if proxy := sys_proxies.get('http'):
+            if proxy := sys_proxies.get('http', ''): # if failed, proxy would be ''
                 print(f'INFO: Automatically use system proxy {proxy}')
         # I don't think system proxy would be missing scheme ever, but just in case
         if proxy and '://' not in proxy:

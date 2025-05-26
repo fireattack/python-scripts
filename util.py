@@ -254,6 +254,7 @@ class Table():
 
 def multi_col_print(data, columns=5):
     '''Print a list of data in a table with columns'''
+    # pip install rich
     from rich.console import Console
     from rich.table import Table
 
@@ -265,9 +266,37 @@ def multi_col_print(data, columns=5):
     for i in range(row_count):
         row = data[i::row_count]
         table.add_row(*row)
-
     console = Console()
     console.print(table)
+
+def rprint(*args, **kwargs):
+    '''
+    Print function that uses rich library to print (This is different from
+    rich.print() because that does not support additional arguments like `style`.)
+    The console obj is created only once and reused.
+    '''
+    # pip install rich
+    from rich.console import Console
+    if not hasattr(rprint, '_console'):
+        rprint._console = Console()
+    rprint._console.print(*args, **kwargs)
+
+def print2(*args, **kwargs):
+    '''
+    Custom print function that manages line endings.
+    If a previous print call ended without a newline (e.g., end=''),
+    and the current call implies a newline (e.g., default end or end='\n'),
+    an explicit newline is printed first to terminate the previous line.
+    The state _newlined is stored as an attribute of the print2 function itself.
+    '''
+    from builtins import print as builtin_print
+    if not hasattr(print2, '_newlined'):
+        print2._newlined = True
+    end = kwargs.pop('end', '\n')
+    if end.endswith('\n') and not print2._newlined:
+        builtin_print()
+    print2._newlined = True if end.endswith('\n') else False
+    builtin_print(*args, **kwargs, end=end)
 
 def array_to_range_text(a, sep=', ', dash='-'):
     s = ''
