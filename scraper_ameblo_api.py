@@ -37,7 +37,7 @@ def download_image(blog_id, id, save_folder='.'):
             desc = img['title']
             desc_ = f'{desc}_{idx}' if len(data['data']) > 1 else desc
             img_name = safeify(f'{img_date} ameblo_{blog_id}_{id} {desc_} {file_name}')
-            ex.submit(download, img_url, Path(save_folder) / img_name, dupe='skip', verbose=1)
+            ex.submit(download, img_url, Path(save_folder) / img_name, dupe='skip', verbose=1, headers=headers)
 
 def download_text(blog_id, id, save_folder='.'):
     # print(f'Processing {id}...')
