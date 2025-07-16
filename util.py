@@ -980,57 +980,72 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
         return True
 
     def replace_suffix(f, content_type):
-        header_suffix = ''
-        mime = content_type.split(';')[0]
-        guess = guess_extension(mime, strict=False)
-        suffix_from_mime = mime.split('/')[-1].lower()
 
-        # manually set suffix for some common types that isn't covered by guess_extension
-        maps = {
-            'audio/mp4': '.m4a',
-            'audio/x-m4a': '.m4a',
-            'image/webp': '.webp',
-        }
-
-        if mime in maps:
-            header_suffix = maps[mime]
-        # if 'application/octet-stream', just use the original suffix (guess_extension gives .bin)
-        elif mime == 'application/octet-stream':
+        # some URLs have multiple mime types in the header, e.g.
+        # https://prd-pspa-s3-content.s3.ap-northeast-1.amazonaws.com/public/18255769761JOGWTUQPoSQXniAYcDMKy.jpg
+        # Content-Type: image/png; image/jpg; image/jpeg
+        header_suffixes = []
+        for mime in content_type.split(';'):
+            mime = mime.strip().lower()
             header_suffix = ''
-        # only use guessed extension if it's valid (and not bin)
-        elif guess is not None:
-            header_suffix = guess
-        # last resort. NOTE: this does not work half the time, maybe just abandon it...
-        elif re.search(r'^[a-zA-Z0-9]+$', suffix_from_mime):
-            header_suffix = '.' + suffix_from_mime
+            guess = guess_extension(mime, strict=False)
+            suffix_from_mime = mime.split('/')[-1].lower()
+            # manually set suffix for some common types that isn't covered by guess_extension
+            maps = {
+                'audio/mp4': '.m4a',
+                'audio/x-m4a': '.m4a',
+                'image/webp': '.webp',
+            }
+            if mime in maps:
+                header_suffix = maps[mime]
+            # if 'application/octet-stream', just use the original suffix (guess_extension gives .bin)
+            elif mime == 'application/octet-stream':
+                header_suffix = ''
+            # only use guessed extension if it's valid (and not bin)
+            elif guess is not None:
+                header_suffix = guess
+            # last resort. NOTE: this does not work half the time, maybe just abandon it...
+            elif re.search(r'^[a-zA-Z0-9]+$', suffix_from_mime):
+                header_suffix = '.' + suffix_from_mime
 
-        # replace logic
-        # if they're the same, we don't need to do anything
-        if f.suffix.lower() == header_suffix:
+            # ignore invalid suffixes
+            if '-' in header_suffix or '+' in header_suffix:
+                header_suffix = ''
+            # early return if we have a valid suffix and it matches the file's suffix
+            if header_suffix:
+                if f.suffix.lower() == header_suffix:
+                    return f
+                # don't replace equivalent extensions
+                ext_alias_groups = [
+                    ['.mp4', '.m4a', '.m4v', '.m4s'],
+                    ['.jpg', '.jpeg']
+                ]
+                for aliases in ext_alias_groups:
+                    if f.suffix.lower() in aliases and header_suffix in aliases:
+                        return f
+                # add it to candidate suffixes otherwise
+                header_suffixes.append(header_suffix)
+        # that means all the suffixes are invalid or empty; just return the original file
+        if not header_suffixes:
             return f
-        # if header_suffix is a bad one, don't do anything
-        if header_suffix == '' or '-' in header_suffix or '+' in header_suffix:
-            return f
-        # don't replace equivalent extensions
-        ext_alias_groups = [
-            ['.mp4', '.m4a', '.m4v', '.m4s'],
-            ['.jpg', '.jpeg']
-        ]
-        for aliases in ext_alias_groups:
-            if f.suffix.lower() in aliases and header_suffix in aliases:
-                return f
-        # likely dynamic content, use header suffix instead (silently)
-        if f.suffix.lower() in ['.php', '']:
+        # use the first valid suffix from the header since we can't determine which one is the best.
+        # but print a warning if there are multiple valid suffixes.
+        if len(header_suffixes) > 1:
+            print(f'[Warning] Multiple valid suffixes found in Content-Type header: {header_suffixes}. Using the first one: {header_suffixes[0]}', 1)
+        header_suffix = header_suffixes[0]
+
+        # likely dynamic content, just use (add) header suffix silently
+        if f.suffix.lower() in ['.php', '.asp', '.jsp', '.cgi', '']:
             return f.with_suffix(header_suffix)
-
         # this is to prevent that when filename has dot in it, it would cause Path obj to consider part of stem is the suffix.
         # so we only replace the suffix that is "valid" (<= 3 chars etc.) but wrong.
         # Not ideal, but should be good enough.
         if has_valid_suffix(f):
             print(f'[Warning] File suffix is different from the one in Content-Type header! {f.suffix.lower()} -> {header_suffix}', 1)
             return f.with_suffix(header_suffix)
-        # f has a weird suffix. We assume it's part of the name stem, so we just append the header suffix (silently).
-        return f.with_name(f.name + header_suffix)
+        else:
+            # f has a weird suffix. We assume it's part of the name stem, so we just append the header suffix (silently).
+            return f.with_name(f.name + header_suffix)
 
     def check_dupe(f, dupe=dupe, size=0):
         if not f.exists():
