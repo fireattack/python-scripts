@@ -9,8 +9,9 @@ from shutil import copy2, copyfileobj, get_terminal_size
 from subprocess import run
 from urllib.parse import unquote, urljoin
 
-import requests
+
 from tqdm import tqdm
+from util import requests_retry_session, get_webname, td_format
 
 
 TOLERANCE = 0.2
@@ -55,36 +56,10 @@ def concat(files, output, verbose=False):
         fi.close()
     out.close()
 
-def get_webname(url):
-    return unquote(url.split('?')[0].split('/')[-1])
-
-def td_format(td):
-    seconds = int(td.total_seconds())
-    in_future = seconds > 0
-    seconds = abs(seconds)
-    periods = [
-        ('year',        60*60*24*365),
-        ('month',       60*60*24*30),
-        ('day',         60*60*24),
-        ('hour',        60*60),
-        ('minute',      60),
-        ('second',      1)
-    ]
-    strings=[]
-    for period_name, period_seconds in periods:
-        if seconds > period_seconds:
-            period_value , seconds = divmod(seconds, period_seconds)
-            has_s = 's' if period_value > 1 else ''
-            strings.append(f"{period_value} {period_name}{has_s}")
-    if in_future:
-        return 'in ' + ', '.join(strings)
-    else:
-        return ', '.join(strings) + ' ago'
-
 
 class InstaliveDownloader:
     def __init__(self, url, save_path, debug=False, quality=None):
-        self.session = requests.Session()
+        self.session = requests_retry_session()
         self.url = url
         if save_path is None:
             mpd_name = get_webname(url).split('.')[0]
@@ -154,11 +129,11 @@ class InstaliveDownloader:
         for v in videos:
             print(f'[{v["idx"]}] {v["id"]} {v["width"]}x{v["height"]}, {v["frame_rate"]}fps, {v["bandwidth"]/1024:.1f} kbps')
 
-        if not quality or quality == 'auto':
+        if not quality or quality == 'highest':
             videos.sort(reverse=True, key=lambda x: (x['width'], x['height'], x['frame_rate'], x['bandwidth']))
             self.video_index = videos[0]['idx']
             self.video_id = videos[0]['id']
-            print(f'Use the best one ([{self.video_index}] {self.video_id}).')
+            print(f'Use the highest one ([{self.video_index}] {self.video_id}).')
         else:
             for v in videos:
                 # quality could be either "dash-lp-pst-v" or "pst"
@@ -308,7 +283,6 @@ class InstaliveDownloader:
             time.sleep(fetch_interval)
 
     def download_video(self, forward=False):
-
         count = 0
         known_intervals = {
             self.interval: 0,
@@ -424,6 +398,7 @@ class InstaliveDownloader:
             return (ids[max_idx], ids[max_idx+1])
         else:
             print('No missing segment found.')
+
 
     def download_audio(self):
         print('Downloading audio segments...')
@@ -578,9 +553,9 @@ if __name__ == '__main__':
     parser.add_argument("--dir", "-d", help="save path (default: instalive_{mpd_id})")
     parser.add_argument("--debug", action='store_true', help="debug mode")
     parser.add_argument("--quality", "-q", default='pst', help="manually assign video quality by quality name.\n"
-                        "(default: \"pst\": which is original (?) and has the best bitrate,\n"
+                        "(default: \"pst\": which is the \"original\" (?) and has the best bitrate,\n"
                         "but not necessarily the highest resolution.\n"
-                        "Pass empty string to use the highest resolution one.)")
+                        "Pass empty string or \"highest\" to use the highest resolution one.)")
     parser.add_argument("--time", "-t", help="for debugging only; manually assign last t (default: auto)")
     parser.add_argument('--range', help='for debugging only; manually assign iteration range (start,end) for manual action')
 
