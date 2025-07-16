@@ -90,7 +90,13 @@ class InstaliveDownloader:
 
     def save_mpd(self):
         print('Save mpd to local file...')
-        (self.save_path/'mpd.mpd').write_text(self.mpd_text, encoding='utf-8')
+        mpd_lines = self.mpd_text.splitlines(keepends=True)
+        comment = f'<!-- {self.url} -->\n'
+        if mpd_lines and mpd_lines[0].strip().startswith('<?xml'):
+            mpd_lines.insert(1, comment)
+        else:
+            mpd_lines.insert(0, comment)
+        (self.save_path / 'mpd.mpd').write_text(''.join(mpd_lines), encoding='utf-8')
 
     def fetch_mpd(self, mute=False):
         if not mute:
