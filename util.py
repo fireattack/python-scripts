@@ -6,6 +6,7 @@ import sys
 import time
 import hashlib
 import shutil
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import unquote
@@ -383,6 +384,11 @@ def compare_obj(value_old, value, print_prefix='ROOT', mute=False):
             print('[red]Old:', value_old)
             print('[green]New:', value)
     return equal
+
+def normalize(s):
+    '''Normalize a string by replacing full-width characters with half-width characters
+    but keep the full-width dash (～) as it is.'''
+    return unicodedata.normalize('NFKC', s.replace('～', '$dash$')).replace('$dash$', '～')
 
 # ==================== datetime related ====================
 def parse_to_shortdate(date_str, fmt=None):
