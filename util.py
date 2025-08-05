@@ -962,7 +962,6 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
     Returns:
         str: The status of the download. Can be 'Dry run', 'Exists', or the HTTP status code.
     """
-    from cgi import parse_header
     from mimetypes import guess_extension
     # it uses requests_retry_session, so
     # pip install requests
@@ -1146,20 +1145,20 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                 web_name = f'{prefix} ' + web_name
             f = p / safeify(web_name)
         if "Content-Disposition" in r.headers: # Get filename from the header
-            # TODO: write a parser myself since cgi.parse_header is deprecated and has its own problems as noted below in "HACK".
+            # Content-Disposition can have multiple formats, e.g.:
 
+            # Content-Disposition: inline
+            # Content-Disposition: attachment
+            # Content-Disposition: attachment; filename="file name.jpg"
+            # Content-Disposition: attachment; filename*=UTF-8''file%20name.jpg
+            # Content-Disposition: filename="file name.jpg" # non-standard, but some sites do this.
             content_disposition = r.headers["Content-Disposition"]
-            # HACK: parse_header doesn't work if there is no value of "attachment" etc. exists.
-            # Like content_disposition == "filename=xxx". So we add a dummy value.
-            # I think it's non-standard, but it's relatively common.
-            if content_disposition.startswith('filename'):
-                content_disposition = 'attachment; ' + r.headers["Content-Disposition"]
-            _, params = parse_header(content_disposition)
+            # parse it to get params
             header_name = ''
-            if 'filename*' in params:
-                header_name = unquote(params['filename*'].lstrip("UTF-8''"))
-            elif 'filename' in params:
-                header_name = params['filename']
+            if m := re.search(r'filename="(.+)"', content_disposition):
+                header_name = m[1]
+            elif m := re.search(r'filename\*=(.+)', content_disposition):
+                header_name = unquote(m[1].removeprefix("UTF-8''"))
             if header_name:
                 if prefix:
                     header_name = f'{prefix} ' + header_name
