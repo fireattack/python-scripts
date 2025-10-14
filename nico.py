@@ -209,9 +209,11 @@ class NicoDownloader():
             assert live_data['userProgramWatch']['canWatch'] == False
             # 'notHaveTimeshiftTicket': not reserved yet
             # 'notUseTimeshiftTicket': reserved but not activated
-            if 'notHaveTimeshiftTicket' in live_data['userProgramWatch']['rejectedReasons'] or \
+            # Sometimes userProgramWatch does not return rejectedReasons, so check userProgramTimeshiftWatch first
+            if live_data.get('userProgramTimeshiftWatch', {}).get('status') == 'Inactive' or \
+                'notHaveTimeshiftTicket' in live_data['userProgramWatch']['rejectedReasons'] or \
                 'notUseTimeshiftTicket' in live_data['userProgramWatch']['rejectedReasons']:
-                if auto_reserve or input('WARN: You do not have timeshift ticket. Do you want to reserve/activate it now? Y/[N] ').lower() == 'y':
+                if auto_reserve or input('WARN: You do not have or activate the timeshift ticket. Do you want to reserve/activate it now? Y/[N] ').lower() == 'y':
                     print('Reserving...')
                     # POST = reserve, PATCH = activate/use
                     reservation_url = f'https://live2.nicovideo.jp/api/v2/programs/{video_id}/timeshift/reservation'
@@ -393,7 +395,9 @@ if __name__ == "__main__":
     for f in [Path(__file__).parent / 'nico.txt', Path('nico.txt')]:
         if f.exists():
             with open(f, encoding='utf8') as f:
-                sys.argv.extend(shlex.split(f.read().replace('\\', '\\\\')))
+                # insert in front so it can be overridden
+                commands = shlex.split(f.read().replace('\\', '\\\\'))
+                sys.argv[1:1] = commands
                 break
 
     # https://stackoverflow.com/questions/3853722/how-to-insert-newlines-on-argparse-help-text
