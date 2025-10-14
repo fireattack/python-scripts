@@ -1200,7 +1200,7 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
         retries = 1
         while retries < 5:
             print(f'[Warning] file size does not match (expected: {expected_size}, actual: {downloaded_size}). Retry {retries}', 1)
-            with session.get(url) as r2:
+            with session.get(url, stream=True) as r2:
                 actually_download(temp_file, r2)
             downloaded_size = temp_file.stat().st_size
             if downloaded_size == expected_size:

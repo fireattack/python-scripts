@@ -7,10 +7,10 @@ from datetime import datetime
 from pathlib import Path
 from shutil import copy2, copyfileobj, get_terminal_size
 from subprocess import run
-from urllib.parse import unquote, urljoin
-
+from urllib.parse import urljoin
 
 from tqdm import tqdm
+
 from util import requests_retry_session, get_webname, td_format
 
 

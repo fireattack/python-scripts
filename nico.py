@@ -207,32 +207,22 @@ class NicoDownloader():
         # to see if there is any other errors
         while not live_data['site']['relive'].get('webSocketUrl', None):
             assert live_data['userProgramWatch']['canWatch'] == False
-            # 'notHaveTimeshiftTicket': not reserved yet
-            # 'notUseTimeshiftTicket': reserved but not activated
-            # Sometimes userProgramWatch does not return rejectedReasons, so check userProgramTimeshiftWatch first
-            if live_data.get('userProgramTimeshiftWatch', {}).get('status') == 'Inactive' or \
-                'notHaveTimeshiftTicket' in live_data['userProgramWatch']['rejectedReasons'] or \
-                'notUseTimeshiftTicket' in live_data['userProgramWatch']['rejectedReasons']:
-                if auto_reserve or input('WARN: You do not have or activate the timeshift ticket. Do you want to reserve/activate it now? Y/[N] ').lower() == 'y':
-                    print('Reserving...')
-                    # POST = reserve, PATCH = activate/use
-                    reservation_url = f'https://live2.nicovideo.jp/api/v2/programs/{video_id}/timeshift/reservation'
-                    r = self.session.post(reservation_url)
-                    print('Tried POST, response:', r.status_code)
-                    r = self.session.patch(reservation_url)
-                    print('Tried PATCH, response:', r.status_code)
-                    if not r.status_code == 200:
-                        print('Reserving or activating failed. Please try reserving it manually in the webpage.')
-                        return return_value
-                    # refetch live_data
-                    live_data = self.fetch_page(url)
-                    # back to the beginning of the loop
-                else:
-                    print("Aborted.")
+            if auto_reserve or input(f'WARN: You don\'t have or have not activated the timeshift ticket:\n{live_data["userProgramWatch"]}\nDo you want to reserve/activate it now? Y/[N] ').lower() == 'y':
+                print('Reserving...')
+                # POST = reserve, PATCH = activate/use
+                reservation_url = f'https://live2.nicovideo.jp/api/v2/programs/{video_id}/timeshift/reservation'
+                r = self.session.post(reservation_url)
+                print('Tried POST, response:', r.status_code)
+                r = self.session.patch(reservation_url)
+                print('Tried PATCH, response:', r.status_code)
+                if r.status_code != 200:
+                    print('Reserving or activating failed. Please try reserving it manually on the webpage.')
                     return return_value
+                # refetch live_data
+                live_data = self.fetch_page(url)
+                # back to the beginning of the loop
             else:
-                reasons = ', '.join(live_data['userProgramWatch']['rejectedReasons'])
-                print(f'ERROR: You cannot watch this video because of: {reasons}.')
+                print("Aborted.")
                 return return_value
 
         # Add warning if it's trial only
