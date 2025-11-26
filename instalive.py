@@ -11,6 +11,7 @@ from urllib.parse import urljoin
 
 from tqdm import tqdm
 
+from _test3 import td_format_two_way
 from util import requests_retry_session, get_webname, td_format
 
 
@@ -110,11 +111,19 @@ class InstaliveDownloader:
         mpd = self.mpd
         #   availabilityStartTime="2024-05-06T01:21:00-07:00"
         #   availabilityEndTime="2024-05-06T01:29:00-07:00"
+
+        def td_format_with_direction(td):
+            '''a wrapper around td_format to show both positive and negative time deltas'''
+            if td.total_seconds() < 0:
+                return td_format(-td) + " ago"
+            else:
+                return 'in ' + td_format(td)
         current_time = datetime.now().astimezone()
         availability_start_time = datetime.strptime(mpd.attrib['availabilityStartTime'], '%Y-%m-%dT%H:%M:%S%z')
         availability_end_time = datetime.strptime(mpd.attrib['availabilityEndTime'], '%Y-%m-%dT%H:%M:%S%z')
-        print(f'Availability start time: {availability_start_time} ({td_format(availability_start_time - current_time)})')
-        print(f'Availability end time: {availability_end_time} ({td_format(availability_end_time - current_time)})')
+
+        print(f'Availability start time: {availability_start_time} ({td_format_with_direction(availability_start_time - current_time)})')
+        print(f'Availability end time: {availability_end_time} ({td_format_with_direction(availability_end_time - current_time)})')
 
         # process video representations
         period = mpd[0]
