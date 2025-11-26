@@ -10,8 +10,6 @@ from subprocess import run
 from urllib.parse import urljoin
 
 from tqdm import tqdm
-
-from _test3 import td_format_two_way
 from util import requests_retry_session, get_webname, td_format
 
 
