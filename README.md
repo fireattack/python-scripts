@@ -45,7 +45,7 @@ options:
 
 ## `oricon.py`
 
-** Deprecated: You can no longer get original size of images from Oricon website AFAIK. The random quality toggling because of CDN is also gone (?). This can still be used to download the images in the size shown on the webpage, though. **
+**Deprecated: You can no longer get original size of images from Oricon website AFAIK. The random quality toggling because of CDN is also gone (?). This can still be used to download the images in the size shown on the webpage, though.**
 
 Quickly download all the highest quality pictures from any Oricon news, special or photo article.
 
@@ -111,7 +111,7 @@ downloader.getPostPhotos(12345)
 
 ## `scraper_radiko.py`
 
-** Deprecated: just use yt-dlp or even better, with [yt-dlp-rajiko](https://github.com/garret1317/yt-dlp-rajiko) plugin. **
+**Deprecated: just use yt-dlp or even better, with [yt-dlp-rajiko](https://github.com/garret1317/yt-dlp-rajiko) plugin.**
 
 Note: you need to prepare the JP proxy yourself.
 
