@@ -300,6 +300,9 @@ def print2(*args, **kwargs):
     builtin_print(*args, **kwargs, end=end)
 
 def array_to_range_text(a, sep=', ', dash='-'):
+    '''
+    Convert an array of integers to a range text (e.g., [1,2,3,5,6,8] -> '1-3, 5-6, 8')
+    '''
     s = ''
     prev_seg = None
     for idx, seg in enumerate(a):
@@ -317,6 +320,19 @@ def array_to_range_text(a, sep=', ', dash='-'):
                 range_start = seg
         prev_seg = seg
     return s
+
+def pluralize(word, count, suffix='s', alt=None):
+    '''
+    Pluralize a word based on the count. If count is 1, return the word as is.
+    If count is not 1, return the word with the suffix added, or the alt word if provided (e.g. for irregular plurals).
+    '''
+    if count == 1:
+        return word
+    else:
+        if alt:
+            return alt
+        else:
+            return word + suffix
 
 def compare_obj(value_old, value, print_prefix='ROOT', mute=False):
     '''
