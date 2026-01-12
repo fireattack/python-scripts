@@ -1039,7 +1039,9 @@ def download(url, filename=None, save_path='.', cookies=None, session=None, dry_
                 # don't replace equivalent extensions
                 ext_alias_groups = [
                     ['.mp4', '.m4a', '.m4v', '.m4s'],
-                    ['.jpg', '.jpeg']
+                    ['.jpg', '.jpeg'],
+                    ['.m3u', '.m3u8'],
+                    ['.mp2t', '.ts'],
                 ]
                 for aliases in ext_alias_groups:
                     if f.suffix.lower() in aliases and header_suffix in aliases:
