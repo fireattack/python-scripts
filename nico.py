@@ -207,7 +207,12 @@ class NicoDownloader():
         # to see if there is any other errors
         while not live_data['site']['relive'].get('webSocketUrl', None):
             assert live_data['userProgramWatch']['canWatch'] == False
-            if auto_reserve or input(f'WARN: You don\'t have or have not activated the timeshift ticket:\n{live_data["userProgramWatch"]}\nDo you want to reserve/activate it now? Y/[N] ').lower() == 'y':
+            # return if isCountryRestrictionTarget is true
+            if live_data['userProgramWatch'].get('isCountryRestrictionTarget', False):
+                print('ERROR: This video is not available in your country.')
+                return return_value
+            print(f'WARN: You don\'t have or have not activated the timeshift ticket. Reason:\n{live_data["userProgramWatch"]}')
+            if auto_reserve or input('Do you want to reserve/activate it now? Y/[N] ').lower() == 'y':
                 print('Reserving...')
                 # POST = reserve, PATCH = activate/use
                 reservation_url = f'https://live2.nicovideo.jp/api/v2/programs/{video_id}/timeshift/reservation'
@@ -219,7 +224,12 @@ class NicoDownloader():
                     print('Reserving or activating failed. Please try reserving it manually on the webpage.')
                     return return_value
                 # refetch live_data
+                old_user_program_watch = live_data['userProgramWatch']
                 live_data = self.fetch_page(url)
+                if live_data['userProgramWatch'] == old_user_program_watch:
+                    print('WARN: live_data did not change after reserving/activating. Something must be wrong.')
+                    print('Aborted.')
+                    return return_value
                 # back to the beginning of the loop
             else:
                 print("Aborted.")
