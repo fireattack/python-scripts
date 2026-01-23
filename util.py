@@ -15,7 +15,7 @@ from urllib.parse import unquote
 # so we can use this file in other projects without installing them.
 # or to copy and paste the functions to other public projects directly.
 # to install them all, you can do:
-# pip install requests lxml beautifulsoup4 python-dateutil pytz pyperclip wcwidth rich rookiepy
+# pip install requests lxml beautifulsoup4 python-dateutil pytz pyperclip wcwidth rich browsercookie
 
 # ==================== CONSTANTS ====================
 
@@ -900,9 +900,8 @@ def load_cookie(s):
     """
     from http.cookiejar import MozillaCookieJar
     from requests.cookies import RequestsCookieJar, create_cookie
-    # import browser_cookie3
-    import rookiepy
-    # pip install browser_cookie3 rookiepy
+    import browsercookie
+    # pip install browsercookie
 
     def convert(cj):
         cookies = RequestsCookieJar()
@@ -920,22 +919,16 @@ def load_cookie(s):
         return cookies
 
     if m := re.search(r'^(chrome|firefox|edge)(/.+)?', str(s), re.IGNORECASE):
-        # domain_name = m[2].lstrip('/') if m[2] else None
-        # if m[1] == 'chrome':
-        #     cj = browser_cookie3.chrome(domain_name=domain_name)
-        # elif m[1] == 'firefox':
-        #     cj = browser_cookie3.firefox(domain_name=domain_name)
-        # elif m[1] == 'edge':
-        #     cj = browser_cookie3.edge(domain_name=domain_name)
-        # return convert(cj)
-        domains = [m[2].lstrip('/')] if m[2] else None
-        if m[1] == 'chrome':
-            rcookies = rookiepy.chrome(domains=domains)
-        elif m[1] == 'firefox':
-            rcookies = rookiepy.firefox(domains=domains)
-        elif m[1] == 'edge':
-            rcookies = rookiepy.edge(domains=domains)
-        return convert(rookiepy.to_cookiejar(rcookies))
+        domain_name = m[2].lstrip('/') if m[2] else None
+        if m[1].lower() == 'chrome':
+            cj = browsercookie.chrome()
+        elif m[1].lower() == 'firefox':
+            cj = browsercookie.firefox()
+        elif m[1].lower() == 'edge':
+            cj = browsercookie.edge()
+        if domain_name:
+            cj = [cookie for cookie in cj if domain_name in cookie.domain]
+        return convert(cj)
 
     if Path(s).exists():
         cj = MozillaCookieJar(s)
