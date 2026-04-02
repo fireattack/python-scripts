@@ -44,9 +44,12 @@ def flatten(x):
     else:
         return [x]
 
-def print_cmd(cmd, prefix=''):
+def print_cmd(cmd, prefix='', actually_print=True):
     commands_text_form = [f'"{c}"' if re.search(r'[ ?]', str(c)) else str(c) for c in cmd]
-    print(prefix + ' '.join(commands_text_form))
+    output = prefix + ' '.join(commands_text_form)
+    if actually_print:
+        print(output)
+    return output
 
 def copy(data):
     # pip install pyperclip
