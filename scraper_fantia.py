@@ -91,6 +91,8 @@ class FantiaDownloader:
                 if f.is_file() and (m := re.match(r'^(\d+)\b', f.name)):
                     existing_ids.append(m.group(1))
             existing_ids = list(dict.fromkeys(existing_ids))
+            existing_ids = set(map(int, existing_ids))
+
         print(f'{len(existing_ids)} ID(s) have already been downloaded.')
 
         def fetch_all():
@@ -134,7 +136,7 @@ class FantiaDownloader:
         r = self.fetch(url)
         r.encoding = 'utf-8'
         html = r.text
-        return re.findall(r'\/posts\/(?P<id>[0-9]{1,8})"', html)
+        return sorted(map(int, re.findall(r'\/posts\/(?P<id>[0-9]{1,8})"', html)), reverse=True)
 
     def update_fanclub_info(self, d):
         self.fanclub_info = d
