@@ -60,12 +60,15 @@ def download_text(blog_id, id, save_folder='.'):
         html = text_folder / safeify(f'{stem}.html')
         if html.exists():
             print(f'{html.name} Already exists! Ignore.')
-            return
-        html.write_text(text, encoding='utf8')
+        else:
+            html.write_text(text, encoding='utf8')
         metadata_folder = Path(save_folder) / 'metadata'
         metadata_folder.mkdir(exist_ok=True, parents=True)
         metadata = metadata_folder / safeify(f'{stem}.json')
-        dump_json(b, metadata)
+        if metadata.exists():
+            print(f'{metadata.name} Already exists! Ignore.')
+        else:
+            dump_json(b, metadata)
     else:
         print(f'[E] cannot fetch data from {url}!')
 
